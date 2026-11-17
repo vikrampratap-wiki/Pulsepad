@@ -1,0 +1,6 @@
+{
+  "name": "PulsePad Cloud Controller",
+  "description": "Ultra-low-latency (10-15ms) WebRTC and binary WebSocket virtual Xbox & PlayStation controller that turns any smartphone into a gamepad for Tablet and Cloud Gaming.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

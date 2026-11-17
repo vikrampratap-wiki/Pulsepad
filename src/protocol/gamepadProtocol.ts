@@ -271,3 +271,62 @@ export function simulateTransportLatency(params: {
     savingPercent,
   };
 }
+
+export const CLOUD_RELAY_FALLBACK_ORIGIN =
+  'https://ais-pre-swupckzn47pok277apvs2h-786374503805.asia-southeast1.run.app';
+
+/**
+ * Resolves the full application base URL including any repository subpath (e.g. `/Pulsepad` on GitHub Pages).
+ */
+export function resolveAppBaseUrl(origin?: string, pathname?: string): string {
+  const rawOrigin =
+    origin !== undefined
+      ? origin
+      : typeof window !== 'undefined'
+        ? window.location.origin
+        : 'http://localhost:3000';
+  const rawPathname =
+    pathname !== undefined
+      ? pathname
+      : typeof window !== 'undefined'
+        ? window.location.pathname
+        : '/';
+
+  const cleanOrigin = rawOrigin.replace(/\/+$/, '');
+  const cleanPath = rawPathname.replace(/\/index\.html$/i, '').replace(/\/+$/, '');
+
+  if (!cleanPath || cleanPath === '/') {
+    return cleanOrigin;
+  }
+  return `${cleanOrigin}${cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`}`;
+}
+
+/**
+ * Builds the scannable QR code / phone pairing URL that preserves subpaths like `/Pulsepad/` on GitHub Pages.
+ */
+export function buildControllerPairUrl(
+  roomCode: string,
+  origin?: string,
+  pathname?: string
+): string {
+  const baseUrl = resolveAppBaseUrl(origin, pathname);
+  const safeRoom = (roomCode || 'PULSE1').trim().toUpperCase() || 'PULSE1';
+  return `${baseUrl}/?mode=controller&room=${encodeURIComponent(safeRoom)}`;
+}
+
+/**
+ * Resolves the WebSocket / API relay origin. On static hosts like `*.github.io` that cannot host `/ws` or `/api/bridge.js`,
+ * uses the live Cloud Run backend origin so cross-device Phone-to-Tablet pairing and external site bridges still work.
+ */
+export function resolveRelayBackendOrigin(origin?: string): string {
+  const rawOrigin =
+    origin !== undefined
+      ? origin
+      : typeof window !== 'undefined'
+        ? window.location.origin
+        : 'http://localhost:3000';
+  if (/\.github\.io$/i.test(rawOrigin.replace(/^https?:\/\//i, '').split('/')[0])) {
+    return CLOUD_RELAY_FALLBACK_ORIGIN;
+  }
+  return rawOrigin.replace(/\/+$/, '');
+}

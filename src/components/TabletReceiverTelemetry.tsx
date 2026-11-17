@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import {
   BUTTON_METADATA,
   VirtualGamepadState,
+  buildControllerPairUrl,
+  resolveRelayBackendOrigin,
 } from '../protocol/gamepadProtocol';
 import { generateCloudGamingBridgeSnippets } from '../protocol/w3cGamepadBridge';
 import { PeerInfo } from '../hooks/usePulsePadTransport';
@@ -47,9 +49,8 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const appOrigin =
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  const controllerPairUrl = `${appOrigin}/?mode=controller&room=${encodeURIComponent(roomCode)}`;
+  const appOrigin = resolveRelayBackendOrigin();
+  const controllerPairUrl = buildControllerPairUrl(roomCode);
   const bridgeSnippets = generateCloudGamingBridgeSnippets(roomCode, appOrigin);
 
   useEffect(() => {

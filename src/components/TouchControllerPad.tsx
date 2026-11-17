@@ -4,6 +4,8 @@ import {
   ControllerSkin,
   StickCalibrationConfig,
   VirtualGamepadState,
+  buildControllerPairUrl,
+  resolveRelayBackendOrigin,
 } from '../protocol/gamepadProtocol';
 import {
   ControllerThemeConfig,
@@ -172,9 +174,8 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
   const shellClasses = getShellThemeClasses(theme.shellTheme);
   const borderAlpha = theme.borderOpacityPercent / 100;
 
-  const appOrigin =
-    typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-  const controllerPairUrl = `${appOrigin}/?mode=controller&room=${encodeURIComponent(roomCode)}`;
+  const appOrigin = resolveRelayBackendOrigin();
+  const controllerPairUrl = buildControllerPairUrl(roomCode);
 
   useEffect(() => {
     let active = true;

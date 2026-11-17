@@ -8,6 +8,7 @@ import {
   decodeGamepadPacket,
   encodeGamepadPacket,
   formatPacketHex,
+  resolveRelayBackendOrigin,
 } from '../protocol/gamepadProtocol';
 import {
   installLocalW3CGamepadBridge,
@@ -192,31 +193,11 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
       }
     }
 
-    const isStaticGithubPages =
-      typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
-
-    if (isStaticGithubPages) {
-      // On static GitHub Pages hosting, mark local W3C + BroadcastChannel transport ready without noisy WS errors
-      setWsConnected(true);
-      setPeers([
-        {
-          clientId: clientIdRef.current,
-          role,
-          deviceLabel: 'GitHub Pages Live Controller',
-          joinedAt: Date.now(),
-        },
-      ]);
-      return () => {
-        isMounted = false;
-        bc?.close();
-      };
-    }
-
     const connect = () => {
       if (!isMounted) return;
       try {
-        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${proto}//${window.location.host}/ws`;
+        const relayOrigin = resolveRelayBackendOrigin();
+        const wsUrl = `${relayOrigin.replace(/^http/i, 'ws')}/ws`;
         const ws = new WebSocket(wsUrl);
         ws.binaryType = 'arraybuffer';
         wsRef.current = ws;

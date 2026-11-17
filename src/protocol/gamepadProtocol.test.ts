@@ -7,6 +7,8 @@ import {
   applyStickResponseCurve,
   simulateTransportLatency,
   formatPacketHex,
+  resolveAppBaseUrl,
+  buildControllerPairUrl,
 } from './gamepadProtocol';
 import { generateCloudGamingBridgeSnippets } from './w3cGamepadBridge';
 import {
@@ -168,3 +170,23 @@ test('drag-and-drop controller layout positions clamp bounds and persist to loca
   const clawPreset = createPresetLayoutMap('claw_ergonomic');
   assert.notEqual(clawPreset.faceButtons.dx, 0);
 });
+
+test('buildControllerPairUrl preserves GitHub Pages repository subpath (/Pulsepad) in QR code URLs', () => {
+  assert.equal(
+    resolveAppBaseUrl('https://vikrampratap-wiki.github.io', '/Pulsepad/'),
+    'https://vikrampratap-wiki.github.io/Pulsepad'
+  );
+  assert.equal(
+    resolveAppBaseUrl('https://vikrampratap-wiki.github.io', '/Pulsepad/index.html'),
+    'https://vikrampratap-wiki.github.io/Pulsepad'
+  );
+  assert.equal(
+    buildControllerPairUrl('pulse1', 'https://vikrampratap-wiki.github.io', '/Pulsepad/'),
+    'https://vikrampratap-wiki.github.io/Pulsepad/?mode=controller&room=PULSE1'
+  );
+  assert.equal(
+    buildControllerPairUrl('PULSE1', 'http://localhost:3000', '/'),
+    'http://localhost:3000/?mode=controller&room=PULSE1'
+  );
+});
+

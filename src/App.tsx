@@ -76,7 +76,7 @@ export default function App() {
         <header className="flex items-center justify-between gap-8 px-6 py-3.5 border-b border-slate-800 bg-slate-950">
           {/* Zone 1: Single text element wordmark */}
           <a
-            href="/"
+            href="./"
             onClick={(e) => {
               e.preventDefault();
               setActiveTab('controller');

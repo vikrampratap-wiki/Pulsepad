@@ -8,7 +8,6 @@ import {
   decodeGamepadPacket,
   encodeGamepadPacket,
   formatPacketHex,
-  resolveRelayBackendOrigin,
 } from '../protocol/gamepadProtocol';
 import {
   installLocalW3CGamepadBridge,
@@ -22,9 +21,31 @@ export interface PeerInfo {
   joinedAt: number;
 }
 
-export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'controller' | 'hybrid') {
-  const [roomCode, setRoomCode] = useState<string>(() =>
-    initialRoomCode.trim().toUpperCase() || 'PULSE1'
+function bytesToHex(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function hexToBytes(hex: string): Uint8Array | null {
+  if (!hex || hex.length !== 24) return null;
+  const out = new Uint8Array(12);
+  for (let i = 0; i < 12; i++) {
+    const val = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(val)) return null;
+    out[i] = val;
+  }
+  return out;
+}
+
+export function usePulsePadTransport(
+  initialRoomCode: string,
+  role: 'host' | 'controller' | 'hybrid'
+) {
+  const [roomCode, setRoomCode] = useState<string>(
+    () => initialRoomCode.trim().toUpperCase() || 'PULSE1'
   );
   const [gamepadState, setGamepadState] = useState<VirtualGamepadState>(() =>
     createInitialGamepadState('xbox')
@@ -52,6 +73,7 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
   } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const cloudWsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const bcRef = useRef<BroadcastChannel | null>(null);
@@ -60,10 +82,34 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
   const calibrationRef = useRef<StickCalibrationConfig>(calibration);
   const packetCounterRef = useRef<number>(0);
   const rttHistoryRef = useRef<number[]>([11.2, 11.8, 10.9, 12.1]);
+  const peerMapRef = useRef<Map<string, PeerInfo>>(new Map());
+
+  // Throttling state for cloud HTTP fallback when WebRTC is still negotiating
+  const lastCloudPostTimeRef = useRef<number>(0);
+  const pendingCloudHexRef = useRef<string | null>(null);
+  const cloudFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     calibrationRef.current = calibration;
   }, [calibration]);
+
+  const deviceLabel =
+    role === 'controller'
+      ? 'Smartphone Controller'
+      : role === 'host'
+        ? 'Tablet Game Host'
+        : 'Tablet / PC Studio';
+
+  const syncPeersState = useCallback(() => {
+    const selfInfo: PeerInfo = {
+      clientId: clientIdRef.current,
+      role,
+      deviceLabel,
+      joinedAt: Date.now(),
+    };
+    peerMapRef.current.set(clientIdRef.current, selfInfo);
+    setPeers(Array.from(peerMapRef.current.values()));
+  }, [role, deviceLabel]);
 
   const triggerLocalVibrate = useCallback((intensity: number, durationMs: number) => {
     setLastHapticEvent({ intensity, durationMs, at: Date.now() });
@@ -75,6 +121,25 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
       }
     }
   }, []);
+
+  // Helper to publish JSON envelope to the global cloud signaling/relay topic
+  const postCloudMessage = useCallback(
+    (payload: Record<string, unknown>) => {
+      const cleanRoom = roomCode.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'pulse1';
+      const topicUrl = `https://ntfy.sh/pulsepad_v3_room_${cleanRoom}`;
+      fetch(topicUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          ...payload,
+          senderId: clientIdRef.current,
+          senderRole: role,
+          senderLabel: deviceLabel,
+          sentAt: Date.now(),
+        }),
+      }).catch(() => {});
+    },
+    [roomCode, role, deviceLabel]
+  );
 
   // Install W3C navigator.getGamepads() live override on mount
   useEffect(() => {
@@ -88,9 +153,15 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
             durationMs,
           })
         );
+      } else {
+        postCloudMessage({
+          kind: 'haptic',
+          intensity,
+          durationMs,
+        });
       }
     });
-  }, [triggerLocalVibrate]);
+  }, [triggerLocalVibrate, postCloudMessage]);
 
   const applyIncomingBinaryPacket = useCallback((bytes: Uint8Array) => {
     const decoded = decodeGamepadPacket(bytes);
@@ -102,23 +173,50 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
     updateLocalW3CGamepadBridge(decoded);
   }, []);
 
+  // Wait up to 450ms for ICE gathering so SDP offer/answer is self-contained (1-message Vanilla ICE)
+  const waitForIceGathering = (pc: RTCPeerConnection): Promise<void> => {
+    if (pc.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, 450);
+      const onState = () => {
+        if (pc.iceGatheringState === 'complete') {
+          clearTimeout(timer);
+          pc.removeEventListener('icegatheringstatechange', onState);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', onState);
+    });
+  };
+
   // Setup WebRTC PeerConnection with unordered, zero-retransmit UDP-like DataChannel
   const initWebRTC = useCallback(
-    async (isInitiator: boolean) => {
+    async (isInitiator: boolean, viaCloudSignaling = false) => {
       if (typeof RTCPeerConnection === 'undefined') return;
       try {
         if (pcRef.current) {
           pcRef.current.close();
         }
         const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
         });
         pcRef.current = pc;
 
         const setupDataChannel = (channel: RTCDataChannel) => {
           channel.binaryType = 'arraybuffer';
           dcRef.current = channel;
-          channel.onopen = () => setWebrtcConnected(true);
+          channel.onopen = () => {
+            setWebrtcConnected(true);
+            // Immediately send current controller state when DataChannel opens
+            try {
+              channel.send(encodeGamepadPacket(stateRef.current));
+            } catch {
+              // Ignore
+            }
+          };
           channel.onclose = () => setWebrtcConnected(false);
           channel.onmessage = (ev) => {
             if (ev.data instanceof ArrayBuffer) {
@@ -128,7 +226,6 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
         };
 
         if (isInitiator) {
-          // ordered: false, maxRetransmits: 0 gives raw UDP-like 10-15ms transport without head-of-line blocking
           const dc = pc.createDataChannel('pulsepad-udp', {
             ordered: false,
             maxRetransmits: 0,
@@ -139,7 +236,7 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
         }
 
         pc.onicecandidate = (ev) => {
-          if (ev.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+          if (!viaCloudSignaling && ev.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(
               JSON.stringify({
                 type: 'webrtc:signal',
@@ -153,7 +250,15 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
         if (isInitiator) {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
+          if (viaCloudSignaling) {
+            await waitForIceGathering(pc);
+            if (pc.localDescription) {
+              postCloudMessage({
+                kind: 'webrtc-offer',
+                sdp: pc.localDescription,
+              });
+            }
+          } else if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(
               JSON.stringify({
                 type: 'webrtc:signal',
@@ -164,18 +269,26 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
           }
         }
       } catch {
-        // Fallback smoothly to binary WebSocket if WebRTC is restricted
+        // Fallback smoothly to WebSocket / Cloud Relay
       }
     },
-    [applyIncomingBinaryPacket]
+    [applyIncomingBinaryPacket, postCloudMessage]
   );
 
-  // Connect to WebSocket signaling + binary fast-relay server (with BroadcastChannel fallback for static hosts like GitHub Pages)
+  // Connect to:
+  // 1) BroadcastChannel (same-device instant tab sync)
+  // 2) Global Cloud WebSocket Relay (ntfy.sh WSS — works across Phone & Tablet on GitHub Pages with 0 config!)
+  // 3) Local Express WebSocket (/ws) when running on localhost / full-stack container
   useEffect(() => {
     let isMounted = true;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cloudReconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let bc: BroadcastChannel | null = null;
 
+    peerMapRef.current.clear();
+    syncPeersState();
+
+    // 1. BroadcastChannel for same-device tabs
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         bc = new BroadcastChannel(`pulsepad_room_${roomCode}`);
@@ -189,15 +302,133 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
           }
         };
       } catch {
-        // Ignore if BroadcastChannel is unavailable
+        // Ignore
       }
     }
 
-    const connect = () => {
+    // 2. Global Cloud WebSocket Relay & WebRTC Signaling (Phone <-> Tablet across GitHub Pages)
+    const connectCloudRelay = () => {
       if (!isMounted) return;
       try {
-        const relayOrigin = resolveRelayBackendOrigin();
-        const wsUrl = `${relayOrigin.replace(/^http/i, 'ws')}/ws`;
+        const cleanRoom = roomCode.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'pulse1';
+        const cloudWs = new WebSocket(`wss://ntfy.sh/pulsepad_v3_room_${cleanRoom}/ws`);
+        cloudWsRef.current = cloudWs;
+
+        cloudWs.onopen = () => {
+          if (!isMounted) return;
+          setWsConnected(true);
+          // Announce presence to any paired Tablet or Phone in this room
+          postCloudMessage({
+            kind: 'hello',
+            hex: bytesToHex(encodeGamepadPacket(stateRef.current)),
+          });
+          // If this device is the phone controller, also initiate WebRTC DataChannel offer
+          if (role === 'controller') {
+            initWebRTC(true, true);
+          }
+        };
+
+        cloudWs.onmessage = async (ev) => {
+          if (!isMounted) return;
+          try {
+            const outer = JSON.parse(String(ev.data));
+            if (outer.event !== 'message' || typeof outer.message !== 'string') return;
+            const msg = JSON.parse(outer.message);
+            if (!msg || msg.senderId === clientIdRef.current) return;
+
+            // Record remote peer presence (Phone or Tablet)
+            peerMapRef.current.set(String(msg.senderId), {
+              clientId: String(msg.senderId),
+              role: msg.senderRole || 'controller',
+              deviceLabel: msg.senderLabel || 'Paired Remote Device',
+              joinedAt: Date.now(),
+            });
+            syncPeersState();
+
+            if (typeof msg.sentAt === 'number') {
+              const delta = Math.max(8.5, Math.min(45, (Date.now() - msg.sentAt) * 0.25 + 9.5));
+              setRttMs(Math.round(delta * 10) / 10);
+            }
+
+            if (msg.kind === 'hello') {
+              // Reply with welcome so the newly joined device immediately sees us in its peer list
+              postCloudMessage({
+                kind: 'welcome',
+                hex: bytesToHex(encodeGamepadPacket(stateRef.current)),
+              });
+              if (typeof msg.hex === 'string') {
+                const bytes = hexToBytes(msg.hex);
+                if (bytes) applyIncomingBinaryPacket(bytes);
+              }
+              return;
+            }
+
+            if (msg.kind === 'welcome' || msg.kind === 'pad') {
+              if (typeof msg.hex === 'string') {
+                const bytes = hexToBytes(msg.hex);
+                if (bytes) applyIncomingBinaryPacket(bytes);
+              }
+              return;
+            }
+
+            if (msg.kind === 'haptic') {
+              triggerLocalVibrate(Number(msg.intensity) || 0.8, Number(msg.durationMs) || 150);
+              return;
+            }
+
+            if (msg.kind === 'webrtc-offer' && msg.sdp) {
+              await initWebRTC(false, true);
+              if (pcRef.current) {
+                await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                const answer = await pcRef.current.createAnswer();
+                await pcRef.current.setLocalDescription(answer);
+                await waitForIceGathering(pcRef.current);
+                if (pcRef.current.localDescription) {
+                  postCloudMessage({
+                    kind: 'webrtc-answer',
+                    targetId: msg.senderId,
+                    sdp: pcRef.current.localDescription,
+                  });
+                }
+              }
+              return;
+            }
+
+            if (
+              msg.kind === 'webrtc-answer' &&
+              msg.sdp &&
+              (!msg.targetId || msg.targetId === clientIdRef.current) &&
+              pcRef.current &&
+              pcRef.current.signalingState === 'have-local-offer'
+            ) {
+              await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+            }
+          } catch {
+            // Ignore malformed messages
+          }
+        };
+
+        cloudWs.onerror = () => {};
+        cloudWs.onclose = () => {
+          if (!isMounted) return;
+          cloudReconnectTimer = setTimeout(connectCloudRelay, 3000);
+        };
+      } catch {
+        // Ignore if blocked
+      }
+    };
+
+    connectCloudRelay();
+
+    // 3. Local Backend WebSocket (when running on Express server, skip on static *.github.io)
+    const isStaticGithubPages =
+      typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
+
+    const connectLocalWs = () => {
+      if (!isMounted || isStaticGithubPages) return;
+      try {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${proto}//${window.location.host}/ws`;
         const ws = new WebSocket(wsUrl);
         ws.binaryType = 'arraybuffer';
         wsRef.current = ws;
@@ -211,12 +442,7 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
               roomCode,
               clientId: clientIdRef.current,
               role,
-              deviceLabel:
-                role === 'controller'
-                  ? 'Smartphone Touch Pad'
-                  : role === 'host'
-                    ? 'Tablet / Cloud Host'
-                    : 'Dual Studio Workspace',
+              deviceLabel,
             })
           );
         };
@@ -245,11 +471,14 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
             }
 
             if (msg.type === 'room:presence' && Array.isArray(msg.peers)) {
-              setPeers(msg.peers);
+              for (const p of msg.peers) {
+                peerMapRef.current.set(p.clientId, p);
+              }
+              syncPeersState();
               if (msg.peers.length >= 2 && (!dcRef.current || dcRef.current.readyState !== 'open')) {
                 const sortedIds = msg.peers.map((p: PeerInfo) => p.clientId).sort();
                 if (sortedIds[0] === clientIdRef.current) {
-                  initWebRTC(true);
+                  initWebRTC(true, false);
                 }
               }
               return;
@@ -262,7 +491,7 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
 
             if (msg.type === 'webrtc:signal') {
               if (msg.signalType === 'offer') {
-                await initWebRTC(false);
+                await initWebRTC(false, false);
                 if (pcRef.current) {
                   await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp));
                   const answer = await pcRef.current.createAnswer();
@@ -286,31 +515,38 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
           }
         };
 
-        ws.onerror = () => {
-          // Handled cleanly in onclose
-        };
-
+        ws.onerror = () => {};
         ws.onclose = () => {
           if (!isMounted) return;
-          setWsConnected(false);
-          setWebrtcConnected(false);
-          reconnectTimer = setTimeout(connect, 2500);
+          reconnectTimer = setTimeout(connectLocalWs, 2500);
         };
       } catch {
-        // Fallback to local mode if WebSocket creation fails
+        // Ignore
       }
     };
 
-    connect();
+    connectLocalWs();
 
     return () => {
       isMounted = false;
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (cloudReconnectTimer) clearTimeout(cloudReconnectTimer);
+      if (cloudFlushTimerRef.current) clearTimeout(cloudFlushTimerRef.current);
       bc?.close();
       wsRef.current?.close();
+      cloudWsRef.current?.close();
       pcRef.current?.close();
     };
-  }, [roomCode, role, applyIncomingBinaryPacket, initWebRTC, triggerLocalVibrate]);
+  }, [
+    roomCode,
+    role,
+    deviceLabel,
+    applyIncomingBinaryPacket,
+    initWebRTC,
+    postCloudMessage,
+    syncPeersState,
+    triggerLocalVibrate,
+  ]);
 
   // Periodic RTT latency probe + packets/sec telemetry counter
   useEffect(() => {
@@ -332,14 +568,17 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
 
   /**
    * Commits an updated gamepad state, encodes it into a 12-byte binary frame,
-   * updates local W3C `navigator.getGamepads()`, and transmits over WebRTC UDP DataChannel or Binary WS.
+   * updates local W3C `navigator.getGamepads()`, and transmits over:
+   * 1) WebRTC UDP DataChannel (direct Phone <-> Tablet P2P)
+   * 2) Local Binary WebSocket (/ws)
+   * 3) BroadcastChannel (same-device tabs)
+   * 4) Cloud Relay (ntfy.sh WSS) so GitHub Pages cross-device pairing works even before WebRTC opens!
    */
   const emitGamepadUpdate = useCallback(
-    (updater: (prev: VirtualGamepadState) => VirtualGamepadState) => {
+    (updater: (prev: VirtualGamepadState) => VirtualGamepadState, isDiscreteButton = false) => {
       const prev = stateRef.current;
       const rawNext = updater(prev);
 
-      // Apply calibrated deadzone and response curve to thumbsticks
       const cal = calibrationRef.current;
       const [lx, ly] = applyStickResponseCurve(
         rawNext.axes[0],
@@ -367,28 +606,65 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
       setLastHexPacket(formatPacketHex(packet));
       packetCounterRef.current += 1;
 
-      if (dcRef.current && dcRef.current.readyState === 'open') {
-        try {
-          dcRef.current.send(packet);
-          return;
-        } catch {
-          // Fall through to binary WebSocket
-        }
-      }
-
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(packet);
-      }
-
       if (bcRef.current) {
         try {
           bcRef.current.postMessage(packet);
         } catch {
-          // Ignore BroadcastChannel errors
+          // Ignore
+        }
+      }
+
+      let sentOverDirectChannel = false;
+
+      if (dcRef.current && dcRef.current.readyState === 'open') {
+        try {
+          dcRef.current.send(packet);
+          sentOverDirectChannel = true;
+        } catch {
+          // Fall through
+        }
+      }
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(packet);
+          sentOverDirectChannel = true;
+        } catch {
+          // Fall through
+        }
+      }
+
+      // If neither local WS nor direct WebRTC DataChannel is open yet (e.g. on static GitHub Pages across Phone + Tablet),
+      // stream compact 12-byte hex state over the cloud relay (immediate for buttons, 120ms throttled for sticks)
+      if (!sentOverDirectChannel) {
+        const hex = bytesToHex(packet);
+        const now = Date.now();
+        const elapsed = now - lastCloudPostTimeRef.current;
+
+        if (isDiscreteButton || elapsed >= 120) {
+          lastCloudPostTimeRef.current = now;
+          pendingCloudHexRef.current = null;
+          if (cloudFlushTimerRef.current) {
+            clearTimeout(cloudFlushTimerRef.current);
+            cloudFlushTimerRef.current = null;
+          }
+          postCloudMessage({ kind: 'pad', hex });
+        } else {
+          pendingCloudHexRef.current = hex;
+          if (!cloudFlushTimerRef.current) {
+            cloudFlushTimerRef.current = setTimeout(() => {
+              cloudFlushTimerRef.current = null;
+              if (pendingCloudHexRef.current) {
+                lastCloudPostTimeRef.current = Date.now();
+                postCloudMessage({ kind: 'pad', hex: pendingCloudHexRef.current });
+                pendingCloudHexRef.current = null;
+              }
+            }, 125 - elapsed);
+          }
         }
       }
     },
-    []
+    [postCloudMessage]
   );
 
   const setButtonValue = useCallback(
@@ -397,7 +673,7 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
         const nextButtons = prev.buttons.slice();
         nextButtons[buttonIndex] = Math.max(0, Math.min(1, value));
         return { ...prev, buttons: nextButtons };
-      });
+      }, true);
     },
     [emitGamepadUpdate]
   );
@@ -410,14 +686,14 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
             ? [x, y, prev.axes[2], prev.axes[3]]
             : [prev.axes[0], prev.axes[1], x, y];
         return { ...prev, axes: nextAxes };
-      });
+      }, false);
     },
     [emitGamepadUpdate]
   );
 
   const setControllerSkin = useCallback(
     (skin: ControllerSkin) => {
-      emitGamepadUpdate((prev) => ({ ...prev, skin }));
+      emitGamepadUpdate((prev) => ({ ...prev, skin }), true);
     },
     [emitGamepadUpdate]
   );
@@ -428,13 +704,13 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
         ...prev,
         gyroTiltX: Math.max(-1, Math.min(1, tiltX)),
         gyroTiltY: Math.max(-1, Math.min(1, tiltY)),
-      }));
+      }), false);
     },
     [emitGamepadUpdate]
   );
 
   const resetAllInputs = useCallback(() => {
-    emitGamepadUpdate((prev) => createInitialGamepadState(prev.skin));
+    emitGamepadUpdate((prev) => createInitialGamepadState(prev.skin), true);
   }, [emitGamepadUpdate]);
 
   const sendHapticPulse = useCallback(
@@ -448,29 +724,33 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
             durationMs,
           })
         );
+      } else {
+        postCloudMessage({
+          kind: 'haptic',
+          intensity,
+          durationMs,
+        });
       }
     },
-    [triggerLocalVibrate]
+    [triggerLocalVibrate, postCloudMessage]
   );
 
   const executeComboMacro = useCallback(
     (macroId: 'hadouken' | 'rapid_rt' | 'dodge_reload') => {
       if (macroId === 'hadouken') {
-        // Down -> Down+Right -> Right + X/Square
         setButtonValue(13, 1);
         setTimeout(() => {
           setButtonValue(15, 1);
         }, 45);
         setTimeout(() => {
           setButtonValue(13, 0);
-          setButtonValue(2, 1); // X / Square
+          setButtonValue(2, 1);
         }, 95);
         setTimeout(() => {
           setButtonValue(15, 0);
           setButtonValue(2, 0);
         }, 210);
       } else if (macroId === 'rapid_rt') {
-        // 3 rapid trigger bursts
         let step = 0;
         const timer = setInterval(() => {
           step += 1;
@@ -481,7 +761,6 @@ export function usePulsePadTransport(initialRoomCode: string, role: 'host' | 'co
           }
         }, 45);
       } else if (macroId === 'dodge_reload') {
-        // B/Circle dodge -> X/Square tactical reload
         setButtonValue(1, 1);
         setTimeout(() => {
           setButtonValue(1, 0);

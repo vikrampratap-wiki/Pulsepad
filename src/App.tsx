@@ -73,7 +73,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Strict 3-Zone Top Bar Contract (Hidden when user enables 100% Pure Controller-Only Mode) */}
       {!pureControllerOnly && (
-        <header className="flex items-center justify-between gap-8 px-6 py-3.5 border-b border-slate-800 bg-slate-950">
+        <header className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-950">
           {/* Zone 1: Single text element wordmark */}
           <a
             href="./"
@@ -87,7 +87,7 @@ export default function App() {
           </a>
 
           {/* Zone 2: 4 clean single-line text navigation links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+          <nav className="flex flex-wrap items-center gap-4 sm:gap-6 text-xs sm:text-sm font-medium text-slate-300">
             <a
               href="#controller"
               onClick={(e) => {
@@ -101,6 +101,18 @@ export default function App() {
               Controller Remote
             </a>
             <a
+              href="#arena"
+              onClick={(e) => {
+                e.preventDefault();
+                setActiveTab('arena');
+              }}
+              className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
+                activeTab === 'arena' ? 'text-white underline' : ''
+              }`}
+            >
+              Cloud Arena (Game)
+            </a>
+            <a
               href="#studio"
               onClick={(e) => {
                 e.preventDefault();
@@ -111,18 +123,6 @@ export default function App() {
               }`}
             >
               Tablet Host & QR
-            </a>
-            <a
-              href="#arena"
-              onClick={(e) => {
-                e.preventDefault();
-                setActiveTab('arena');
-              }}
-              className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
-                activeTab === 'arena' ? 'text-white underline' : ''
-              }`}
-            >
-              Cloud Arena
             </a>
             <a
               href="#lab"

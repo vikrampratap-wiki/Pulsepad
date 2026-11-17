@@ -27,13 +27,15 @@ jobs:
           node-version: "22"
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build production bundle
         run: npm run build
 
-      - name: Add .nojekyll to dist
-        run: touch dist/.nojekyll
+      - name: Add .nojekyll and SPA 404 fallback to dist
+        run: |
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
 
       - name: Deploy dist to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4

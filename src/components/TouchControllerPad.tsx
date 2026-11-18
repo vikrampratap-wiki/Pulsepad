@@ -41,9 +41,7 @@ import {
   Palette,
   Move,
   Wifi,
-  Smartphone,
   RefreshCw,
-  X,
 } from 'lucide-react';
 
 export type ControllerGripLayout = 'console_shell' | 'split_edge' | 'arcade_fightpad';
@@ -92,7 +90,6 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
   peersCount = 1,
   isPureControllerOnly = false,
   onTogglePureControllerOnly,
-  onNavigateTab,
 }) => {
   const leftStickRef = useRef<HTMLDivElement | null>(null);
   const rightStickRef = useRef<HTMLDivElement | null>(null);
@@ -325,10 +322,10 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
       accent-color: ${theme.triggerAccentHex};
     }
     .pad-stick-left-pos {
-      transform: translate3d(${(gamepadState.axes[0] * 24).toFixed(1)}px, ${(gamepadState.axes[1] * 24).toFixed(1)}px, 0);
+      transform: translate3d(${(gamepadState.axes[0] * 26).toFixed(1)}px, ${(gamepadState.axes[1] * 26).toFixed(1)}px, 0);
     }
     .pad-stick-right-pos {
-      transform: translate3d(${(gamepadState.axes[2] * 24).toFixed(1)}px, ${(gamepadState.axes[3] * 24).toFixed(1)}px, 0);
+      transform: translate3d(${(gamepadState.axes[2] * 26).toFixed(1)}px, ${(gamepadState.axes[3] * 26).toFixed(1)}px, 0);
     }
     .pad-deadzone-ring {
       width: ${Math.max(12, Math.round(calibration.deadzone * 100))}%;
@@ -423,7 +420,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
     return (
       <div className="flex flex-col items-center gap-1 w-full">
-        {/* Compact Single Header Row: Stick Label + Axis Readout + Center(0,0) + L3/R3 Click */}
+        {/* Compact Single Header Row: Stick Label + Center(0,0) + L3/R3 Click */}
         <div className="flex items-center justify-between gap-1 w-full px-0.5 text-[10px] text-slate-400">
           <span className="font-semibold text-slate-300 truncate">{label}</span>
           <div className="flex items-center gap-1 shrink-0">
@@ -481,8 +478,8 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           }}
           className={`relative ${
             isLarge
-              ? 'w-20 h-20 sm:w-32 sm:h-32 lg:w-36 lg:h-36'
-              : 'w-[74px] h-[74px] sm:w-28 sm:h-28 lg:w-32 lg:h-32'
+              ? 'w-24 h-24 sm:w-32 sm:h-32 lg:w-36 lg:h-36'
+              : 'w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32'
           } rounded-full border-2 transition-colors controller-surface flex items-center justify-center cursor-grab active:cursor-grabbing ${shellClasses.moduleSurface} pad-stick-ring-themed shadow-inner`}
         >
           <div className="absolute inset-1.5 rounded-full border border-slate-800/90 pointer-events-none" />
@@ -491,11 +488,11 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           <div className="rounded-full border border-dashed pointer-events-none pad-deadzone-ring" />
 
           <div
-            className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 flex flex-col items-center justify-center pointer-events-none transition-transform duration-75 ${
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 flex flex-col items-center justify-center pointer-events-none transition-transform duration-75 ${
               stick === 'left' ? 'pad-stick-left-pos' : 'pad-stick-right-pos'
             } ${stickClicked ? 'pad-stick-cap-active scale-95' : 'pad-stick-cap-themed'}`}
           >
-            <span className="text-[9px] sm:text-[11px] font-mono font-bold">
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold">
               {stick === 'left' ? (isPS ? 'L3' : 'LS') : isPS ? 'R3' : 'RS'}
             </span>
           </div>
@@ -511,13 +508,13 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
     const right = (gamepadState.buttons[15] ?? 0) > 0.5;
 
     const btnBase =
-      'w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl border font-mono text-xs font-bold transition-transform active:scale-95 controller-surface';
+      'w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl border font-mono text-xs font-bold transition-transform active:scale-95 controller-surface';
 
     return (
       <div className="flex flex-col items-center gap-0.5">
         <span className="text-[10px] text-slate-400">D-Pad</span>
         <div
-          className={`grid grid-cols-3 gap-1 p-1 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
+          className={`grid grid-cols-3 gap-1 p-1.5 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
         >
           <div />
           <button
@@ -546,7 +543,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           >
             ◀
           </button>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
             DPAD
           </div>
           <button
@@ -604,7 +601,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(2, 1)}
               onPointerUp={() => handleButtonRelease(2)}
               onPointerLeave={() => handleButtonRelease(2)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b2 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -616,7 +613,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(3, 1)}
               onPointerUp={() => handleButtonRelease(3)}
               onPointerLeave={() => handleButtonRelease(3)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b3 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -628,7 +625,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(5, 1)}
               onPointerUp={() => handleButtonRelease(5)}
               onPointerLeave={() => handleButtonRelease(5)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
                 b5 ? 'pad-trigger-themed-active' : 'bg-slate-900 pad-trigger-themed'
               }`}
             >
@@ -641,7 +638,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(0, 1)}
               onPointerUp={() => handleButtonRelease(0)}
               onPointerLeave={() => handleButtonRelease(0)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b0 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -653,7 +650,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(1, 1)}
               onPointerUp={() => handleButtonRelease(1)}
               onPointerLeave={() => handleButtonRelease(1)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b1 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -665,7 +662,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(7, 1)}
               onPointerUp={() => handleButtonRelease(7)}
               onPointerLeave={() => handleButtonRelease(7)}
-              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
+              className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
                 b7 ? 'pad-trigger-themed-active' : 'bg-slate-900 pad-trigger-themed'
               }`}
             >
@@ -679,7 +676,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
     const sizeClass =
       skin === 'pro_claw' || gripLayout === 'split_edge'
         ? 'w-10 h-10 sm:w-12 sm:h-12 text-xs sm:text-sm'
-        : 'w-9 h-9 sm:w-11 sm:h-11 text-xs sm:text-sm';
+        : 'w-10 h-10 sm:w-11 sm:h-11 text-xs sm:text-sm';
 
     return (
       <div className="flex flex-col items-center gap-0.5">
@@ -689,7 +686,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         <div
           data-testid="face-buttons-cluster"
           data-button-accent={theme.buttonAccentHex}
-          className={`grid grid-cols-3 gap-1 sm:gap-1.5 p-1 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
+          className={`grid grid-cols-3 gap-1 sm:gap-1.5 p-1.5 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
         >
           <div />
           <button
@@ -719,7 +716,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
             {isPS ? '□' : 'X'}
           </button>
 
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
             {isPS ? 'PS5' : 'XBOX'}
           </div>
 
@@ -757,7 +754,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
   const renderCenterBridgeContent = () => (
     <div
-      className={`flex flex-wrap lg:flex-col items-center justify-between gap-1.5 sm:gap-2.5 p-1.5 sm:p-3 rounded-2xl border ${shellClasses.moduleSurface}`}
+      className={`flex flex-wrap lg:flex-col items-center justify-between gap-1.5 sm:gap-2 p-1.5 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
     >
       {/* System Menu Buttons: View / Guide / Menu */}
       <div className="flex items-center justify-center gap-1.5 w-full lg:w-auto">
@@ -767,7 +764,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           onPointerDown={() => handleButtonPress(8, 1)}
           onPointerUp={() => handleButtonRelease(8)}
           onPointerLeave={() => handleButtonRelease(8)}
-          className={`min-h-[30px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+          className={`min-h-[32px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[8] ?? 0) > 0.5
               ? 'pad-btn-themed-active font-bold'
               : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-600'
@@ -782,7 +779,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           onPointerDown={() => handleButtonPress(16, 1)}
           onPointerUp={() => handleButtonRelease(16)}
           onPointerLeave={() => handleButtonRelease(16)}
-          className={`min-w-[36px] min-h-[32px] sm:min-w-[44px] sm:min-h-[42px] px-2.5 rounded-full border-2 font-display font-bold text-[11px] transition-transform active:scale-95 whitespace-nowrap shrink-0 ${
+          className={`min-w-[38px] min-h-[34px] sm:min-w-[44px] sm:min-h-[42px] px-2.5 rounded-full border-2 font-display font-bold text-[11px] transition-transform active:scale-95 whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[16] ?? 0) > 0.5
               ? 'pad-btn-themed-active'
               : 'bg-slate-900 pad-btn-themed'
@@ -797,7 +794,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           onPointerDown={() => handleButtonPress(9, 1)}
           onPointerUp={() => handleButtonRelease(9)}
           onPointerLeave={() => handleButtonRelease(9)}
-          className={`min-h-[30px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+          className={`min-h-[32px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[9] ?? 0) > 0.5
               ? 'pad-btn-themed-active font-bold'
               : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-600'
@@ -806,7 +803,6 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           {isPS ? 'Options' : 'Menu / Start'}
         </button>
 
-        {/* Compact Gyro Toggle Pill right next to Start on Mobile */}
         <button
           type="button"
           onClick={() =>
@@ -815,7 +811,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               gyroEnabled: !prev.gyroEnabled,
             }))
           }
-          className={`min-h-[30px] px-2 rounded-xl text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+          className={`min-h-[32px] px-2 rounded-xl text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
             calibration.gyroEnabled
               ? 'bg-emerald-500 text-slate-950'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
@@ -826,8 +822,12 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         </button>
       </div>
 
-      {/* Gyro Slider (Desktop/Tablet or when Gyro Enabled) & 1-Row Quick Macros */}
-      <div className="w-full flex flex-wrap lg:flex-col items-center justify-between gap-1.5">
+      {/* Gyro Slider (Desktop/Tablet or when Gyro Enabled) & 1-Row Quick Macros (Hidden in Pure 1-Screen Mode unless desktop) */}
+      <div
+        className={`${
+          isPureControllerOnly ? 'hidden lg:flex' : 'flex'
+        } w-full flex-wrap lg:flex-col items-center justify-between gap-1.5`}
+      >
         <div
           className={`${
             calibration.gyroEnabled ? 'flex' : 'hidden sm:flex'
@@ -888,8 +888,6 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
     </div>
   );
 
-  const hasOpenModalDrawer = showThemePicker || showOptionsDrawer || showExternalSiteModal;
-
   return (
     <div
       data-testid="virtual-controller-shell"
@@ -900,299 +898,283 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         shellClasses.textPrimary
       } ${
         isPureControllerOnly
-          ? 'flex-1 h-full min-h-0 p-1.5 sm:p-3 flex flex-col justify-between gap-1 sm:gap-2 overflow-hidden select-none'
-          : 'p-2 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5 overflow-hidden'
+          ? 'flex-1 h-full min-h-0 p-1.5 sm:p-3 flex flex-col justify-between gap-1.5 overflow-hidden select-none'
+          : 'p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3 overflow-hidden'
       } transition-colors`}
     >
       <style>{dynamicThemeCss}</style>
 
-      {/* Row 1: Ultra-Compact All-in-One Room ID & Mode Command Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1 rounded-xl bg-slate-950/90 border border-slate-800 shrink-0">
-        {/* Left: Unique 10-Digit Room ID + Input + New Secret ID Generator */}
-        <div className="flex flex-wrap items-center gap-1">
+      {/* =====================================================================
+          MODE A: PURE 1-SCREEN CONTROLLER LOCK (एक-स्क्रीन मोड)
+          Shows ONLY a tiny corner Room ID badge + "बाहर निकलें (Exit)" button at top,
+          leaving 95% of the screen purely for the controller buttons and sticks!
+         ===================================================================== */}
+      {isPureControllerOnly ? (
+        <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 shrink-0">
+          {/* Tiny Top-Left Corner ID Badge */}
           <span
             data-testid="live-pairing-badge"
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-mono font-semibold border ${
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
               isTabletPaired
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                : 'bg-slate-900/90 border-slate-700 text-amber-300'
             }`}
           >
-            <Wifi className="w-3 h-3 shrink-0" />
+            <Wifi className="w-2.5 h-2.5 shrink-0" />
             <span>
               {isTabletPaired
-                ? `LINKED (${peersCount} · ${rttMs.toFixed(0)}ms)`
+                ? `LINKED · ${formattedRoomId} (${rttMs.toFixed(0)}ms)`
                 : `ID: ${formattedRoomId}`}
             </span>
           </span>
 
-          {onRoomCodeChange && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const clean = sanitizeRoomId(quickRoomInput);
-                if (clean) {
-                  onRoomCodeChange(clean);
-                }
-              }}
-              className="inline-flex items-center gap-1"
-            >
-              <label htmlFor="quick-pad-room-input" className="sr-only">
-                Room Code
-              </label>
-              <input
-                id="quick-pad-room-input"
-                type="text"
-                maxLength={14}
-                value={quickRoomInput}
-                onChange={(e) => setQuickRoomInput(e.target.value.toUpperCase())}
-                aria-label="Room Code"
-                className="w-24 sm:w-28 min-h-[26px] px-1.5 rounded-md bg-slate-900 border border-slate-700 font-mono font-bold text-[10px] sm:text-[11px] text-amber-400 uppercase"
-              />
-              <button
-                type="submit"
-                className="min-h-[26px] px-2 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-white whitespace-nowrap shrink-0"
-              >
-                Join
-              </button>
-              {onGenerateNewRoomId && (
-                <button
-                  type="button"
-                  data-testid="generate-new-room-btn"
-                  onClick={onGenerateNewRoomId}
-                  title="Generate New 10-Digit Secret Numeric ID"
-                  className="min-h-[26px] px-1.5 rounded-md bg-slate-900 border border-slate-700 hover:border-amber-400 text-[10px] font-semibold text-amber-300 flex items-center gap-0.5 whitespace-nowrap shrink-0"
-                >
-                  <RefreshCw className="w-2.5 h-2.5" />
-                  <span>नया ID</span>
-                </button>
-              )}
-            </form>
-          )}
-        </div>
-
-        {/* Right: Skin + Grip + Single-Screen Toggle + Utility Triggers */}
-        <div className="flex flex-wrap items-center gap-1">
-          {/* Console Skin Selector */}
-          <div className="flex items-center gap-0.5 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
-            <button
-              type="button"
-              onClick={() => onSkinChange('xbox')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
-                skin === 'xbox'
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Xbox Series X|S
-            </button>
-            <button
-              type="button"
-              onClick={() => onSkinChange('playstation')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
-                skin === 'playstation'
-                  ? 'bg-sky-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              PS5 DualSense
-            </button>
-            <button
-              type="button"
-              onClick={() => onSkinChange('pro_claw')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
-                skin === 'pro_claw'
-                  ? 'bg-amber-500 text-slate-950'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              Pro Claw + Gyro
-            </button>
-          </div>
-
-          {/* Ergonomic Grip Selector (Desktop / Tablet inline) */}
-          <div className="hidden md:flex items-center gap-0.5 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
-            <button
-              type="button"
-              onClick={() => setGripLayout('console_shell')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                gripLayout === 'console_shell'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Console Grip
-            </button>
-            <button
-              type="button"
-              onClick={() => setGripLayout('split_edge')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                gripLayout === 'split_edge'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Split Thumb-Edge
-            </button>
-            <button
-              type="button"
-              onClick={() => setGripLayout('arcade_fightpad')}
-              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                gripLayout === 'arcade_fightpad'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              6-Btn Fightpad
-            </button>
-          </div>
-
-          {/* Utility Drawer Triggers */}
-          <button
-            type="button"
-            data-testid="open-layout-editor-btn"
-            onClick={() => {
-              const nextOpen = !showLayoutEditor;
-              setShowLayoutEditor(nextOpen);
-              setIsDragModeActive(nextOpen);
-            }}
-            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-              showLayoutEditor || isDragModeActive
-                ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
-            }`}
-          >
-            <Move className="w-3 h-3" />
-            <span>Edit Layout (Drag)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowThemePicker((v) => !v);
-              setShowOptionsDrawer(false);
-              setShowExternalSiteModal(false);
-            }}
-            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-              showThemePicker
-                ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
-            }`}
-          >
-            <Palette className="w-3 h-3" />
-            <span>Theme & Colors</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setShowOptionsDrawer((v) => !v);
-              setShowThemePicker(false);
-              setShowExternalSiteModal(false);
-            }}
-            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-              showOptionsDrawer
-                ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
-            }`}
-          >
-            <Settings2 className="w-3 h-3" />
-            <span>Options & QR</span>
-          </button>
-
-          <button
-            type="button"
-            data-testid="open-external-bridge-btn"
-            onClick={() => {
-              setShowExternalSiteModal((v) => !v);
-              setShowThemePicker(false);
-              setShowOptionsDrawer(false);
-            }}
-            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-              showExternalSiteModal
-                ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                : 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
-            }`}
-          >
-            <Globe className="w-3 h-3" />
-            <span>अन्य गेमिंग साइट (Xbox)</span>
-          </button>
-
+          {/* Tiny Top-Right Corner Exit Button to access Themes, Layout, QR, or Xbox settings */}
           {onTogglePureControllerOnly && (
             <button
               type="button"
               data-testid="single-screen-mode-btn"
               onClick={onTogglePureControllerOnly}
-              className={`min-h-[26px] px-2 py-0.5 text-[10px] font-bold rounded-md border flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
-                isPureControllerOnly
-                  ? 'bg-amber-500 text-slate-950 border-amber-400'
-                  : 'bg-slate-900 border-amber-500/50 text-amber-300 hover:border-amber-400'
-              }`}
+              className="min-h-[24px] px-2 py-0.5 text-[10px] font-semibold rounded-md bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 flex items-center gap-1 whitespace-nowrap shrink-0"
             >
-              {isPureControllerOnly ? (
-                <>
-                  <Minimize2 className="w-3 h-3" />
-                  <span>एक-स्क्रीन ON (सभी टैब दिखाएं)</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="w-3 h-3" />
-                  <span>एक-स्क्रीन मोड (No Scroll)</span>
-                </>
-              )}
+              <Minimize2 className="w-2.5 h-2.5 text-amber-400" />
+              <span>सेटिंग्स / बाहर निकलें</span>
             </button>
           )}
         </div>
-      </div>
-
-      {/* Modular Drawer 0: Drag-and-Drop Button & Stick Layout Studio */}
-      {showLayoutEditor && (
-        <div
-          className={
-            isPureControllerOnly
-              ? 'max-h-[34dvh] overflow-y-auto rounded-xl border border-amber-500/50 shrink-0'
-              : ''
-          }
-        >
-          <ControllerLayoutEditorDrawer
-            isDragModeActive={isDragModeActive}
-            onToggleDragMode={() => setIsDragModeActive((v) => !v)}
-            selectedModule={selectedModule}
-            onSelectModule={setSelectedModule}
-            modules={modulePositions}
-            onUpdateModuleOffset={updateModuleOffset}
-            onApplyPreset={applyLayoutPreset}
-          />
-        </div>
-      )}
-
-      {/* Floating Overlay Modal Wrapper when in Single-Screen Mode so drawers never push controller buttons off-screen! */}
-      {hasOpenModalDrawer && (
-        <div
-          className={
-            isPureControllerOnly
-              ? 'fixed inset-x-2 top-12 z-50 max-h-[84dvh] overflow-y-auto rounded-2xl shadow-2xl border border-slate-700 bg-slate-950/95 p-2 flex flex-col gap-2'
-              : 'flex flex-col gap-2'
-          }
-        >
-          {isPureControllerOnly && (
-            <div className="flex items-center justify-between px-2 py-1 border-b border-slate-800">
-              <span className="text-xs font-semibold text-amber-400">
-                कंट्रोलर सेटिंग्स (1-Screen Overlay)
+      ) : (
+        /* =====================================================================
+           MODE B: FULL CUSTOMIZATION & SETTINGS TOOLBAR (when exited from 1-Screen Mode)
+           Allows editing Room ID, Skin, Grip, Drag Layout, Theme Colors, QR & Xbox Bridge.
+           ===================================================================== */
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span
+                data-testid="live-pairing-badge"
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold border ${
+                  isTabletPaired
+                    ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                }`}
+              >
+                <Wifi className="w-3 h-3 shrink-0" />
+                <span>
+                  {isTabletPaired
+                    ? `LINKED (${peersCount} · ${rttMs.toFixed(0)}ms)`
+                    : `ID: ${formattedRoomId}`}
+                </span>
               </span>
+
+              {onRoomCodeChange && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const clean = sanitizeRoomId(quickRoomInput);
+                    if (clean) {
+                      onRoomCodeChange(clean);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1"
+                >
+                  <label htmlFor="quick-pad-room-input" className="sr-only">
+                    Room Code
+                  </label>
+                  <input
+                    id="quick-pad-room-input"
+                    type="text"
+                    maxLength={14}
+                    value={quickRoomInput}
+                    onChange={(e) => setQuickRoomInput(e.target.value.toUpperCase())}
+                    aria-label="Room Code"
+                    className="w-28 min-h-[28px] px-2 rounded-md bg-slate-900 border border-slate-700 font-mono font-bold text-[11px] text-amber-400 uppercase"
+                  />
+                  <button
+                    type="submit"
+                    className="min-h-[28px] px-2.5 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-white whitespace-nowrap shrink-0"
+                  >
+                    Join
+                  </button>
+                  {onGenerateNewRoomId && (
+                    <button
+                      type="button"
+                      data-testid="generate-new-room-btn"
+                      onClick={onGenerateNewRoomId}
+                      title="Generate New 10-Digit Secret Numeric ID"
+                      className="min-h-[28px] px-2 rounded-md bg-slate-900 border border-slate-700 hover:border-amber-400 text-[10px] font-semibold text-amber-300 flex items-center gap-1 whitespace-nowrap shrink-0"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>नया ID</span>
+                    </button>
+                  )}
+                </form>
+              )}
+            </div>
+
+            {onTogglePureControllerOnly && (
               <button
                 type="button"
+                data-testid="single-screen-mode-btn"
                 onClick={() => {
+                  setShowLayoutEditor(false);
+                  setIsDragModeActive(false);
                   setShowThemePicker(false);
                   setShowOptionsDrawer(false);
                   setShowExternalSiteModal(false);
+                  onTogglePureControllerOnly();
                 }}
-                className="min-h-[26px] px-2 rounded-lg bg-slate-800 text-white text-xs font-semibold flex items-center gap-1"
+                className="min-h-[28px] px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
-                <span>बंद करें (Close)</span>
+                <Maximize2 className="w-3 h-3" />
+                <span>एक-स्क्रीन मोड (केवल कंट्रोलर)</span>
+              </button>
+            )}
+          </div>
+
+          {/* Customization Command Bar (Only shown outside 1-Screen Mode) */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-800 shrink-0">
+            <div className="flex items-center gap-0.5 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
+              <button
+                type="button"
+                onClick={() => onSkinChange('xbox')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  skin === 'xbox'
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Xbox Series X|S
+              </button>
+              <button
+                type="button"
+                onClick={() => onSkinChange('playstation')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  skin === 'playstation'
+                    ? 'bg-sky-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                PS5 DualSense
+              </button>
+              <button
+                type="button"
+                onClick={() => onSkinChange('pro_claw')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  skin === 'pro_claw'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Pro Claw + Gyro
               </button>
             </div>
+
+            <div className="flex items-center gap-0.5 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setGripLayout('console_shell')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  gripLayout === 'console_shell'
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Console Grip
+              </button>
+              <button
+                type="button"
+                onClick={() => setGripLayout('split_edge')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  gripLayout === 'split_edge'
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Split Thumb-Edge
+              </button>
+              <button
+                type="button"
+                onClick={() => setGripLayout('arcade_fightpad')}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  gripLayout === 'arcade_fightpad'
+                    ? 'bg-slate-800 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                6-Btn Fightpad
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                data-testid="open-layout-editor-btn"
+                onClick={() => {
+                  const nextOpen = !showLayoutEditor;
+                  setShowLayoutEditor(nextOpen);
+                  setIsDragModeActive(nextOpen);
+                }}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                  showLayoutEditor || isDragModeActive
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                }`}
+              >
+                <Move className="w-3 h-3" />
+                <span>Edit Layout (Drag)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowThemePicker((v) => !v)}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                  showThemePicker
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                }`}
+              >
+                <Palette className="w-3 h-3" />
+                <span>Theme & Colors</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowOptionsDrawer((v) => !v)}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                  showOptionsDrawer
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                }`}
+              >
+                <Settings2 className="w-3 h-3" />
+                <span>Options & QR</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="open-external-bridge-btn"
+                onClick={() => setShowExternalSiteModal((v) => !v)}
+                className={`min-h-[28px] px-2 py-0.5 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                  showExternalSiteModal
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                    : 'bg-slate-950 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                }`}
+              >
+                <Globe className="w-3 h-3" />
+                <span>अन्य गेमिंग साइट (Xbox)</span>
+              </button>
+            </div>
+          </div>
+
+          {showLayoutEditor && (
+            <ControllerLayoutEditorDrawer
+              isDragModeActive={isDragModeActive}
+              onToggleDragMode={() => setIsDragModeActive((v) => !v)}
+              selectedModule={selectedModule}
+              onSelectModule={setSelectedModule}
+              modules={modulePositions}
+              onUpdateModuleOffset={updateModuleOffset}
+              onApplyPreset={applyLayoutPreset}
+            />
           )}
 
           {showThemePicker && (
@@ -1225,10 +1207,10 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           {showExternalSiteModal && (
             <ExternalGamingBridgeDrawer roomCode={roomCode} appOrigin={appOrigin} />
           )}
-        </div>
+        </>
       )}
 
-      {/* Row 2: Shoulder Bumpers (LB/RB or L1/R1) & Triggers (LT/RT or L2/R2) — Single Compact Horizontal Strip! */}
+      {/* Row 2: Shoulder Bumpers (LB/RB or L1/R1) & Triggers (LT/RT or L2/R2) */}
       <div className="grid grid-cols-2 gap-1.5 sm:gap-3 shrink-0">
         {renderDraggableModule(
           'leftShoulder',
@@ -1241,7 +1223,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(4, 1)}
               onPointerUp={() => handleButtonRelease(4)}
               onPointerLeave={() => handleButtonRelease(4)}
-              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[4] ?? 0) > 0.5
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1275,7 +1257,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(6, 1)}
               onPointerUp={() => handleButtonRelease(6)}
               onPointerLeave={() => handleButtonRelease(6)}
-              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[6] ?? 0) > 0.2
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1297,7 +1279,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(7, 1)}
               onPointerUp={() => handleButtonRelease(7)}
               onPointerLeave={() => handleButtonRelease(7)}
-              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[7] ?? 0) > 0.2
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1331,7 +1313,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(5, 1)}
               onPointerUp={() => handleButtonRelease(5)}
               onPointerLeave={() => handleButtonRelease(5)}
-              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[38px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[5] ?? 0) > 0.5
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1384,39 +1366,6 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           )}
         </div>
       </div>
-
-      {/* Row 4 (Only when in Single-Screen Mode): Ultra-Slim Quick Navigation Strip so user can switch to Game Arena or QR without scrolling */}
-      {isPureControllerOnly && onNavigateTab && (
-        <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-xl bg-slate-950/90 border border-slate-800/80 text-[10px] shrink-0">
-          <span className="text-slate-400 flex items-center gap-1 truncate">
-            <Smartphone className="w-3 h-3 text-emerald-400 shrink-0" />
-            <span>एक-स्क्रीन मोड सक्रिय (Zero-Swipe Lock)</span>
-          </span>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => onNavigateTab('arena')}
-              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
-            >
-              Cloud Arena (गेम)
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('studio')}
-              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
-            >
-              Tablet QR
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('lab')}
-              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
-            >
-              Protocol Lab
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

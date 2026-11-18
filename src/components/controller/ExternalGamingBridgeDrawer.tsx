@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { generateCloudGamingBridgeSnippets } from '../../protocol/w3cGamepadBridge';
 import { formatRoomIdDisplay, resolveAppBaseUrl } from '../../protocol/gamepadProtocol';
+import { registerExternalTargetWindow } from '../../hooks/usePulsePadTransport';
 import { Download, Copy, Check, ExternalLink, Radio, ShieldCheck, Tv } from 'lucide-react';
 
 interface ExternalGamingBridgeDrawerProps {
@@ -14,10 +15,40 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [popupLaunched, setPopupLaunched] = useState<boolean>(false);
+  const [xboxLaunched, setXboxLaunched] = useState<boolean>(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
   const bridgeSnippets = generateCloudGamingBridgeSnippets(roomCode, appOrigin);
   const formattedRoom = formatRoomIdDisplay(roomCode);
 
+  // Starts a near-silent Web Audio oscillator so Tablet Chrome/Safari NEVER freezes this tab in the background
+  // while the user is playing on the xbox.com/play tab!
+  const startTabletKeepAwakeAudio = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioCtxRef.current) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0001; // Imperceptible, prevents background tab throttling on Android/iPad
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        audioCtxRef.current = ctx;
+      } else if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+    } catch {
+      // Ignore if unsupported
+    }
+  };
+
   const handleCopy = (id: string, text: string) => {
+    startTabletKeepAwakeAudio();
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text).catch(() => {});
     }
@@ -25,7 +56,20 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
     setTimeout(() => setCopiedId(null), 2200);
   };
 
+  const handleLaunchXboxCloudLinked = () => {
+    startTabletKeepAwakeAudio();
+    if (typeof window === 'undefined') return;
+    try {
+      const win = window.open('https://www.xbox.com/play', 'pulsepad_xbox_target');
+      registerExternalTargetWindow(win);
+      setXboxLaunched(true);
+    } catch {
+      // Ignore
+    }
+  };
+
   const handleDownloadUserscript = () => {
+    startTabletKeepAwakeAudio();
     const blob = new Blob([bridgeSnippets.userscriptContent], {
       type: 'application/javascript;charset=utf-8',
     });
@@ -40,11 +84,13 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
   };
 
   const handleOpenRelayPopup = () => {
+    startTabletKeepAwakeAudio();
     if (typeof window === 'undefined') return;
     const baseUrl = resolveAppBaseUrl();
     const relayUrl = `${baseUrl}/?bridge=1&room=${encodeURIComponent(roomCode)}`;
     try {
-      window.open(relayUrl, 'pulsepad_bridge', 'width=420,height=320');
+      const win = window.open(relayUrl, 'pulsepad_bridge', 'width=420,height=320');
+      registerExternalTargetWindow(win);
       setPopupLaunched(true);
     } catch {
       // Ignore if blocked
@@ -61,16 +107,16 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
           <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-400">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>
-              TABLET XBOX CLOUD GAMING (xbox.com/play) DIRECT BRIDGE v5 · ID: {formattedRoom}
+              TABLET XBOX CLOUD GAMING (xbox.com/play) DIRECT BRIDGE v6 · ID: {formattedRoom}
             </span>
           </div>
           <h3 className="text-sm sm:text-base font-display font-bold text-white">
-            टैबलेट (Tablet) पर Xbox Cloud Gaming (xbox.com/play) से सीधे जोड़ने के निर्देश:
+            टैबलेट पर Xbox का "Controller not connected" निशान हटाने और बटन चलाने का v6 समाधान:
           </h3>
           <p className="text-xs text-slate-300 leading-relaxed">
-            टैबलेट के Chrome/Safari ब्राउज़र में सामान्य बुकमार्क मेनू (⋮ → Bookmarks) से बुकमार्कलेट काम नहीं करता।{' '}
-            <strong className="text-emerald-400">टैबलेट पर इसे चलाने के लिए नीचे दिए गए 3 आसान कदम अपनाएं</strong>—यह बिना टैब बदले सीधे{' '}
-            <code className="text-amber-300">xbox.com/play</code> के अंदर आपका कंट्रोलर चालू कर देगा!
+            <strong className="text-amber-300">पहले बटन क्यों नहीं चले?</strong> Chrome ब्राउज़र में कृत्रिम{' '}
+            <code>new GamepadEvent</code> पर WebIDL त्रुटि आ रही थी और Xbox का फ़ायरवॉल बाहरी सिग्नल रोक रहा था। नए{' '}
+            <strong className="text-emerald-400">v6 Tablet Bridge</strong> में हमने इसे पूरी तरह ठीक कर दिया है—नीचे से नया कोड कॉपी करके अपने बुकमार्क को एक बार अपडेट कर लें!
           </p>
         </div>
 
@@ -84,25 +130,28 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             {copiedId === 'bm' ? (
               <>
                 <Check className="w-3.5 h-3.5" />
-                <span>Tablet Xbox Code Copied!</span>
+                <span>v6 Xbox Code Copied!</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>Step 1: Copy Tablet Xbox Code</span>
+                <span>Step 1: Copy NEW v6 Xbox Code</span>
               </>
             )}
           </button>
 
-          <a
-            href="https://www.xbox.com/play"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={handleLaunchXboxCloudLinked}
             className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            <span>Step 2: xbox.com/play खोलें ↗</span>
-          </a>
+            <span>
+              {xboxLaunched
+                ? '✓ xbox.com/play Linked (Keep Tab Open)'
+                : 'Step 2: यहाँ से xbox.com/play खोलें ↗'}
+            </span>
+          </button>
 
           <button
             type="button"
@@ -129,29 +178,29 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
         <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-amber-400">
-            कदम 1: टैबलेट पर बुकमार्क सेव करें (सिर्फ़ एक बार)
+            कदम 1: अपना बुकमार्क नए v6 कोड से अपडेट करें
           </span>
           <p className="text-slate-300 leading-relaxed">
-            ऊपर <strong className="text-amber-300">Step 1: Copy Tablet Xbox Code</strong> बटन दबाएं। अब अपने टैबलेट ब्राउज़र में इस पेज को बुकमार्क (★) करें, बुकमार्क को <strong className="text-white">Edit</strong> करें, उसका नाम छोटा रखें जैसे <code className="text-emerald-300 font-bold">xboxpad</code> और उसके URL में कॉपी किया हुआ पूरा कोड पेस्ट करके सेव कर दें।
+            ऊपर <strong className="text-amber-300">Step 1: Copy NEW v6 Xbox Code</strong> दबाएं और अपने टैबलेट के <code className="text-emerald-300 font-bold">xboxpad</code> बुकमार्क को Edit करके उसमें यह नया v6 कोड पेस्ट कर दें (पुराने कोड में Chrome का इवेंट ब्लॉक हो रहा था, जो अब ठीक हो चुका है)।
           </p>
         </div>
 
         <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-emerald-400 flex items-center gap-1">
             <Tv className="w-3.5 h-3.5" />
-            <span>कदम 2 (सबसे ज़रूरी): टैबलेट की URL पट्टी से चलाएं</span>
+            <span>कदम 2: इसी पेज से xbox.com/play खोलें</span>
           </span>
           <p className="text-slate-300 leading-relaxed">
-            अब टैबलेट पर <strong className="text-white">xbox.com/play</strong> खोलें। <strong className="text-rose-300">बुकमार्क मेनू में मत जाएं!</strong> इसके बजाय ऊपर <strong className="text-white">Address Bar (जहां xbox.com लिखा है)</strong> पर टैप करें, वहां <code className="text-emerald-300 font-bold">xboxpad</code> टाइप करें और नीचे दिखने वाले ★ बुकमार्क सुझाव पर टैप करें!
+            टैबलेट पर इस PulsePad टैब को <strong className="text-white">बंद मत करें</strong>! ऊपर हरे बटन <strong className="text-emerald-300">Step 2: यहाँ से xbox.com/play खोलें ↗</strong> पर टैप करें—इससे दोनों टैब आपस में जुड़ जाएंगे और Xbox का फ़ायरवॉल आपके फ़ोन के बटनों को नहीं रोक पाएगा।
           </p>
         </div>
 
         <div className="p-3 rounded-xl bg-slate-900 border border-sky-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-sky-400">
-            कदम 3: तुरंत कनेक्ट! (या Kiwi/Edge एक्सटेंशन तरीका)
+            कदम 3: URL पट्टी में xboxpad चलाएं
           </span>
           <p className="text-slate-300 leading-relaxed">
-            टैप करते ही Xbox स्क्रीन के कोने में <code className="text-emerald-300">Xbox Controller Connected · ID {formattedRoom}</code> दिख जाएगा और Xbox का "Connect a controller" बॉक्स अपने-आप हट जाएगा! (यदि आप टैबलेट पर <strong className="text-white">Microsoft Edge / Kiwi Browser</strong> चलाते हैं, तो Tampermonkey में <code className="text-amber-300">.user.js</code> डालकर यह 100% ऑटोमैटिक हो जाता है)।
+            अब <strong className="text-white">xbox.com/play</strong> वाले टैब की ऊपरी URL पट्टी में <code className="text-emerald-300 font-bold">xboxpad</code> लिखकर नीचे आने वाले ★ सुझाव पर टैप करें। कोने में <code className="text-emerald-300">🎮 Xbox Pad LIVE (Pkt #...)</code> दिखते ही Xbox का कंट्रोलर निशान तुरंत चालू हो जाएगा!
           </p>
         </div>
       </div>

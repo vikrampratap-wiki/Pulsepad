@@ -42,18 +42,38 @@ function hexToBytes(hex: string): Uint8Array | null {
   return out;
 }
 
+const subscribedExternalWindows = new Set<Window>();
+
+export function registerExternalTargetWindow(win: Window | null): void {
+  if (!win) return;
+  subscribedExternalWindows.add(win);
+}
+
 function forwardPacketToOpenerWindow(bytes: Uint8Array): void {
   if (typeof window === 'undefined') return;
+  const payload = { __pulsepad_hex: bytesToHex(bytes) };
   try {
     if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ __pulsepad_hex: bytesToHex(bytes) }, '*');
+      window.opener.postMessage(payload, '*');
     }
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ __pulsepad_hex: bytesToHex(bytes) }, '*');
+      window.parent.postMessage(payload, '*');
     }
   } catch {
     // Ignore cross-origin frame restrictions if any
   }
+
+  subscribedExternalWindows.forEach((targetWin) => {
+    try {
+      if (!targetWin || targetWin.closed) {
+        subscribedExternalWindows.delete(targetWin);
+      } else {
+        targetWin.postMessage(payload, '*');
+      }
+    } catch {
+      // Ignore
+    }
+  });
 }
 
 export function usePulsePadTransport(
@@ -190,6 +210,22 @@ export function usePulsePadTransport(
         });
       }
     });
+
+    const onWindowMessage = (ev: MessageEvent) => {
+      if (!ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.__pulsepad_subscribe && ev.source && 'postMessage' in ev.source) {
+        const srcWin = ev.source as Window;
+        subscribedExternalWindows.add(srcWin);
+        try {
+          const initialBytes = encodeGamepadPacket(stateRef.current);
+          srcWin.postMessage({ __pulsepad_hex: bytesToHex(initialBytes) }, '*');
+        } catch {
+          // Ignore
+        }
+      }
+    };
+    window.addEventListener('message', onWindowMessage);
+    return () => window.removeEventListener('message', onWindowMessage);
   }, [triggerLocalVibrate, postCloudMessage]);
 
   const applyIncomingBinaryPacket = useCallback((bytes: Uint8Array) => {

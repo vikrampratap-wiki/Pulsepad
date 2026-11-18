@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePulsePadTransport } from './hooks/usePulsePadTransport';
 import {
   formatRoomIdDisplay,
@@ -12,20 +12,25 @@ import { ProtocolLabPage } from './pages/ProtocolLabPage';
 
 export type ActiveWorkspaceTab = 'controller' | 'studio' | 'arena' | 'lab';
 
+function parseTabFromLocation(): ActiveWorkspaceTab {
+  if (typeof window === 'undefined') return 'controller';
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode') || params.get('page');
+  if (mode === 'studio') return 'studio';
+  if (mode === 'arena' || params.get('autostart') === '1') return 'arena';
+  if (mode === 'lab') return 'lab';
+  return 'controller';
+}
+
 export default function App() {
   const params =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const initialRoom = getOrCreatePersistentRoomId(params?.get('room'));
-  const initialModeParam = params?.get('mode');
+  const initialModeParam = params?.get('mode') || params?.get('page');
   const autostartArena = params?.get('autostart') === '1';
   const isBridgeRelayPopup = params?.get('bridge') === '1';
 
-  const [activeTab, setActiveTab] = useState<ActiveWorkspaceTab>(() => {
-    if (initialModeParam === 'studio') return 'studio';
-    if (initialModeParam === 'arena' || autostartArena) return 'arena';
-    if (initialModeParam === 'lab') return 'lab';
-    return 'controller';
-  });
+  const [activeTab, setActiveTab] = useState<ActiveWorkspaceTab>(() => parseTabFromLocation());
 
   // Single-Screen Controller Lock Mode (1-Screen Full Mode: zero vertical scroll on mobile!)
   // Automatically enabled when opened via QR (?mode=controller) or on mobile phone screens (<768px)
@@ -67,6 +72,34 @@ export default function App() {
     initialModeParam === 'controller' ? 'controller' : 'hybrid'
   );
 
+  // Sync browser URL query string (?mode=...) so each of the 4 pages has its own dedicated URL & Back/Forward history
+  const navigateToPage = (tab: ActiveWorkspaceTab) => {
+    setActiveTab(tab);
+    if (tab !== 'controller') {
+      setPureControllerOnly(false);
+    }
+    if (typeof window !== 'undefined' && window.history?.pushState) {
+      try {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('mode', tab);
+        nextUrl.searchParams.set('room', roomCode);
+        nextUrl.hash = '';
+        window.history.pushState({ tab }, '', nextUrl.toString());
+      } catch {
+        // Ignore in restricted frames
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = () => {
+      setActiveTab(parseTabFromLocation());
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const handleGenerateNewRoomId = () => {
     const nextRoom = generateSecureNumericRoomId();
     setRoomCode(nextRoom);
@@ -91,12 +124,7 @@ export default function App() {
     webrtcConnected,
     peersCount: Math.max(1, peers.length),
     activeTab,
-    onNavigateTab: (tab: ActiveWorkspaceTab) => {
-      setActiveTab(tab);
-      if (tab !== 'controller') {
-        setPureControllerOnly(false);
-      }
-    },
+    onNavigateTab: navigateToPage,
   };
 
   const isSingleScreenController = activeTab === 'controller' && pureControllerOnly;
@@ -131,10 +159,10 @@ export default function App() {
         <header className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-2.5 border-b border-slate-800 bg-slate-950 shrink-0">
           {/* Zone 1: Single text element wordmark */}
           <a
-            href="./"
+            href="./?mode=controller"
             onClick={(e) => {
               e.preventDefault();
-              setActiveTab('controller');
+              navigateToPage('controller');
             }}
             className="text-base sm:text-lg font-display font-bold tracking-tight text-white whitespace-nowrap shrink-0"
           >
@@ -144,10 +172,10 @@ export default function App() {
           {/* Zone 2: 4 clean single-line text navigation links */}
           <nav className="flex flex-wrap items-center gap-3 sm:gap-6 text-xs sm:text-sm font-medium text-slate-300">
             <a
-              href="#controller"
+              href="./?mode=controller"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveTab('controller');
+                navigateToPage('controller');
               }}
               className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === 'controller' ? 'text-white underline' : ''
@@ -156,10 +184,10 @@ export default function App() {
               Controller Remote
             </a>
             <a
-              href="#arena"
+              href="./?mode=arena"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveTab('arena');
+                navigateToPage('arena');
               }}
               className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === 'arena' ? 'text-white underline' : ''
@@ -168,10 +196,10 @@ export default function App() {
               Cloud Arena (Game)
             </a>
             <a
-              href="#studio"
+              href="./?mode=studio"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveTab('studio');
+                navigateToPage('studio');
               }}
               className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === 'studio' ? 'text-white underline' : ''
@@ -180,10 +208,10 @@ export default function App() {
               Tablet Host & QR
             </a>
             <a
-              href="#lab"
+              href="./?mode=lab"
               onClick={(e) => {
                 e.preventDefault();
-                setActiveTab('lab');
+                navigateToPage('lab');
               }}
               className={`hover:text-white hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0 ${
                 activeTab === 'lab' ? 'text-white underline' : ''
@@ -198,7 +226,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('controller');
+                navigateToPage('controller');
                 setPureControllerOnly(true);
               }}
               className="px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-500 rounded-lg hover:bg-amber-400 transition-colors whitespace-nowrap shrink-0"
@@ -232,7 +260,7 @@ export default function App() {
             packetsPerSec={packetsPerSec}
             peers={peers}
             lastHexPacket={lastHexPacket}
-            onSwitchToControllerMode={() => setActiveTab('controller')}
+            onSwitchToControllerMode={() => navigateToPage('controller')}
           />
         )}
 
@@ -246,11 +274,13 @@ export default function App() {
 
         {activeTab === 'lab' && (
           <ProtocolLabPage
+            roomCode={roomCode}
             gamepadState={gamepadState}
             lastHexPacket={lastHexPacket}
             calibration={calibration}
             onCalibrationChange={setCalibration}
             onButtonToggle={(idx, val) => setButtonValue(idx, val)}
+            onSwitchToControllerMode={() => navigateToPage('controller')}
           />
         )}
       </main>

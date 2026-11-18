@@ -22,7 +22,7 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
       navigator.clipboard.writeText(text).catch(() => {});
     }
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setTimeout(() => setCopiedId(null), 2200);
   };
 
   const handleDownloadUserscript = () => {
@@ -61,66 +61,57 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
           <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-400">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>
-              XBOX CLOUD GAMING (xbox.com/play) CSP-BYPASS BRIDGE v4 · PRIVATE ID: {formattedRoom}
+              TABLET XBOX CLOUD GAMING (xbox.com/play) DIRECT BRIDGE v5 · ID: {formattedRoom}
             </span>
           </div>
           <h3 className="text-sm sm:text-base font-display font-bold text-white">
-            Xbox Cloud Gaming (xbox.com/play) के "Connect a Controller" बॉक्स में सीधे कैसे जोड़ें?
+            टैबलेट (Tablet) पर Xbox Cloud Gaming (xbox.com/play) से सीधे जोड़ने के निर्देश:
           </h3>
           <p className="text-xs text-slate-300 leading-relaxed">
-            <strong className="text-amber-300">पुराना बुकमार्कलेट क्यों नहीं चला?</strong> Xbox Cloud Gaming की सुरक्षा नीति (Strict CSP Firewall) बाहरी कनेक्शन को रोक देती है और केवल असली{' '}
-            <code className="text-emerald-300">Gamepad.prototype</code> को ही स्वीकार करती है। हमने नया{' '}
-            <strong className="text-emerald-400">v4 CSP-Bypass Bridge + Auto-Extension</strong> बना दिया है जो Xbox के कंट्रोलर बॉक्स में तुरंत{' '}
-            <strong className="text-white">Xbox Wireless Controller Connected</strong> दिखाता है!
+            टैबलेट के Chrome/Safari ब्राउज़र में सामान्य बुकमार्क मेनू (⋮ → Bookmarks) से बुकमार्कलेट काम नहीं करता।{' '}
+            <strong className="text-emerald-400">टैबलेट पर इसे चलाने के लिए नीचे दिए गए 3 आसान कदम अपनाएं</strong>—यह बिना टैब बदले सीधे{' '}
+            <code className="text-amber-300">xbox.com/play</code> के अंदर आपका कंट्रोलर चालू कर देगा!
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            data-testid="download-xbox-userscript-btn"
-            onClick={handleDownloadUserscript}
-            className="min-h-[38px] px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>1. Download Xbox Auto-Extension (.user.js)</span>
-          </button>
-
-          <button
-            type="button"
             data-testid="copy-xbox-bookmarklet-btn"
             onClick={() => handleCopy('bm', bridgeSnippets.bookmarkletHref)}
-            className="min-h-[38px] px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+            className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
           >
             {copiedId === 'bm' ? (
               <>
                 <Check className="w-3.5 h-3.5" />
-                <span>v4 Bookmarklet Copied!</span>
+                <span>Tablet Xbox Code Copied!</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>2. Copy v4 Xbox Bookmarklet</span>
+                <span>Step 1: Copy Tablet Xbox Code</span>
               </>
             )}
           </button>
 
+          <a
+            href="https://www.xbox.com/play"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-h-[38px] px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>Step 2: xbox.com/play खोलें ↗</span>
+          </a>
+
           <button
             type="button"
-            onClick={() => handleCopy('cs', bridgeSnippets.consoleSnippet)}
-            className="min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-200 font-medium text-xs flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            data-testid="download-xbox-userscript-btn"
+            onClick={handleDownloadUserscript}
+            className="min-h-[38px] px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-400 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
           >
-            {copiedId === 'cs' ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Console Code Copied!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Console Code</span>
-              </>
-            )}
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Auto-Userscript (.user.js)</span>
           </button>
 
           <button
@@ -129,43 +120,38 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             className="min-h-[38px] px-3 py-1.5 rounded-xl bg-sky-500/20 border border-sky-400/50 hover:bg-sky-500/30 text-sky-300 font-semibold text-xs flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>{popupLaunched ? 'Relay Popup Active' : 'Test Bridge Relay Window'}</span>
+            <span>{popupLaunched ? 'Relay Active' : 'Open Relay Window'}</span>
           </button>
         </div>
       </div>
 
+      {/* Step-by-Step Tablet Instructions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
-        <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/30 flex flex-col gap-1.5">
+        <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/40 flex flex-col gap-1.5">
+          <span className="font-bold text-amber-400">
+            कदम 1: टैबलेट पर बुकमार्क सेव करें (सिर्फ़ एक बार)
+          </span>
+          <p className="text-slate-300 leading-relaxed">
+            ऊपर <strong className="text-amber-300">Step 1: Copy Tablet Xbox Code</strong> बटन दबाएं। अब अपने टैबलेट ब्राउज़र में इस पेज को बुकमार्क (★) करें, बुकमार्क को <strong className="text-white">Edit</strong> करें, उसका नाम छोटा रखें जैसे <code className="text-emerald-300 font-bold">xboxpad</code> और उसके URL में कॉपी किया हुआ पूरा कोड पेस्ट करके सेव कर दें।
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl bg-slate-900 border border-emerald-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-emerald-400 flex items-center gap-1">
             <Tv className="w-3.5 h-3.5" />
-            <span>विकल्प 1 (सबसे पक्का): Xbox में ऑटोमैटिक कनेक्ट</span>
+            <span>कदम 2 (सबसे ज़रूरी): टैबलेट की URL पट्टी से चलाएं</span>
           </span>
           <p className="text-slate-300 leading-relaxed">
-            टैबलेट/PC के ब्राउज़र (Chrome, Edge, Kiwi या Safari) में <strong className="text-white">Tampermonkey</strong> या <strong className="text-white">Userscripts</strong> एक्सटेंशन जोड़ें और ऊपर दिया{' '}
-            <strong className="text-emerald-300">1. Download Xbox Auto-Extension (.user.js)</strong> इंस्टॉल करें। अब जब भी आप{' '}
-            <strong className="text-white">xbox.com/play</strong> खोलेंगे, जहां Xbox "Connect a Controller" मांगता है वहां आपका फ़ोन (ID:{' '}
-            <strong className="text-amber-300 font-mono">{formattedRoom}</strong>) अपने-आप जुड़ जाएगा!
+            अब टैबलेट पर <strong className="text-white">xbox.com/play</strong> खोलें। <strong className="text-rose-300">बुकमार्क मेनू में मत जाएं!</strong> इसके बजाय ऊपर <strong className="text-white">Address Bar (जहां xbox.com लिखा है)</strong> पर टैप करें, वहां <code className="text-emerald-300 font-bold">xboxpad</code> टाइप करें और नीचे दिखने वाले ★ बुकमार्क सुझाव पर टैप करें!
           </p>
         </div>
 
-        <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/30 flex flex-col gap-1.5">
-          <span className="font-bold text-amber-400 flex items-center gap-1">
-            <ExternalLink className="w-3.5 h-3.5" />
-            <span>विकल्प 2: नया v4 CSP-Bypass Bookmarklet</span>
-          </span>
-          <p className="text-slate-300 leading-relaxed">
-            ऊपर <strong className="text-amber-300">2. Copy v4 Xbox Bookmarklet</strong> पर टैप करके नया कोड कॉपी करें और अपने बुकमार्क के URL में पेस्ट करें। जब आप{' '}
-            <strong className="text-white">xbox.com/play</strong> खोलकर इस बुकमार्क पर क्लिक करेंगे, यह Xbox के फ़ायरवॉल को बायपास करने के लिए एक छोटा रिले पॉपअप खोलेगा और कोई भी बटन दबाते ही Xbox में कंट्रोलर चालू हो जाएगा!
-          </p>
-        </div>
-
-        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1.5">
+        <div className="p-3 rounded-xl bg-slate-900 border border-sky-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-sky-400">
-            विकल्प 3: मोबाइल/टैबलेट एड्रेस बार ट्रिक
+            कदम 3: तुरंत कनेक्ट! (या Kiwi/Edge एक्सटेंशन तरीका)
           </span>
           <p className="text-slate-300 leading-relaxed">
-            मोबाइल/टैबलेट Chrome में बुकमार्क चलाने के लिए <strong className="text-white">xbox.com/play</strong> के टैब में ऊपर एड्रेस बार (URL पट्टी) पर टैप करें, अपने सेव किए हुए बुकमार्क का नाम लिखें, और नीचे आने वाले बुकमार्क पर टैप करें—ऊपर हरी पट्टी{' '}
-            <code className="text-emerald-300">PULSEPAD XBOX BRIDGE ACTIVE</code> दिखते ही गेम शुरू करें!
+            टैप करते ही Xbox स्क्रीन के कोने में <code className="text-emerald-300">Xbox Controller Connected · ID {formattedRoom}</code> दिख जाएगा और Xbox का "Connect a controller" बॉक्स अपने-आप हट जाएगा! (यदि आप टैबलेट पर <strong className="text-white">Microsoft Edge / Kiwi Browser</strong> चलाते हैं, तो Tampermonkey में <code className="text-amber-300">.user.js</code> डालकर यह 100% ऑटोमैटिक हो जाता है)।
           </p>
         </div>
       </div>

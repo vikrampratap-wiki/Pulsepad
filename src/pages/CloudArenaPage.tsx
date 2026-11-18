@@ -1,14 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { CloudGamingSandbox } from '../components/CloudGamingSandbox';
-import { TouchControllerPad, TouchControllerPadProps } from '../components/TouchControllerPad';
+import { TouchControllerPadProps } from '../components/TouchControllerPad';
 import {
   BUTTON_METADATA,
   buildControllerPairUrl,
   formatRoomIdDisplay,
+  resolveAppBaseUrl,
   sanitizeRoomId,
 } from '../protocol/gamepadProtocol';
-import { QrCode, Smartphone, Wifi, Copy, Check, RefreshCw } from 'lucide-react';
+import {
+  QrCode,
+  Smartphone,
+  Wifi,
+  Copy,
+  Check,
+  RefreshCw,
+  Gamepad2,
+  ExternalLink,
+} from 'lucide-react';
 
 interface CloudArenaPageProps extends TouchControllerPadProps {
   autostart?: boolean;
@@ -16,7 +26,8 @@ interface CloudArenaPageProps extends TouchControllerPadProps {
 }
 
 /**
- * Sub-Page 3: Dedicated Cloud Gaming Test Arena (Mecha Pulse 60fps Game + Live Phone Pairing Dock + Controller)
+ * Dedicated Sub-Page 2: Cloud Arena (Game) Page (`/?mode=arena`)
+ * Standalone 60fps Mecha Pulse Cloud Game + Live Phone Pairing Bar (separated from the Virtual Controller page).
  */
 export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
   autostart = false,
@@ -31,6 +42,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
     peersCount = 1,
     webrtcConnected = false,
     rttMs,
+    onNavigateTab,
   } = controllerProps;
 
   const [roomInput, setRoomInput] = useState(roomCode);
@@ -38,6 +50,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
   const [copied, setCopied] = useState(false);
 
   const pairUrl = buildControllerPairUrl(roomCode);
+  const standaloneArenaUrl = `${resolveAppBaseUrl()}/?mode=arena&room=${encodeURIComponent(roomCode)}`;
   const isPhoneLinked = peersCount >= 2 || webrtcConnected;
   const formattedRoom = formatRoomIdDisplay(roomCode);
 
@@ -69,7 +82,45 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
   ).map((b) => (gamepadState.skin === 'playstation' ? b.psLabel : b.xboxLabel));
 
   return (
-    <section aria-label="Cloud Gaming Test Arena" className="flex flex-col gap-5">
+    <section
+      aria-label="Cloud Gaming Test Arena"
+      data-testid="standalone-arena-page"
+      className="flex flex-col gap-5"
+    >
+      {/* Dedicated Page Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div>
+          <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400">
+            Dedicated Page 02 · /?mode=arena
+          </span>
+          <h1 className="text-lg sm:text-xl font-display font-bold text-white">
+            Cloud Arena (60fps Game Host Page)
+          </h1>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('controller')}
+              className="min-h-[36px] px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-xs font-semibold text-slate-200 flex items-center gap-1.5"
+            >
+              <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Controller Remote पेज पर जाएं</span>
+            </button>
+          )}
+          <a
+            href={standaloneArenaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-h-[36px] px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-emerald-400 text-xs font-medium text-emerald-300 flex items-center gap-1.5"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>अलग टैब में खोलें (Standalone URL)</span>
+          </a>
+        </div>
+      </div>
+
       {/* Tablet Game + Phone Controller Pairing Bar */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex flex-col gap-2 flex-1">
@@ -98,7 +149,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
           <h2 className="text-base sm:text-lg font-display font-bold text-white flex items-center gap-2">
             <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              टैबलेट पर यह गेम खोलें और दाईं ओर का QR कोड अपने फ़ोन से स्कैन करके फ़ोन से गेम कंट्रोल करें!
+              टैबलेट पर यह अलग गेम पेज खुला रखें और दाईं ओर का QR कोड अपने फ़ोन से स्कैन करके फ़ोन से गेम कंट्रोल करें!
             </span>
           </h2>
 
@@ -194,15 +245,12 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
         </div>
       </div>
 
-      {/* 60fps Mecha Pulse Game Canvas */}
+      {/* 60fps Mecha Pulse Game Canvas (Dedicated to Cloud Arena Page) */}
       <CloudGamingSandbox
         gamepadState={controllerProps.gamepadState}
         onRumble={onRumble}
         autostart={autostart}
       />
-
-      {/* Virtual Controller Pad below for local testing or hybrid control */}
-      <TouchControllerPad {...controllerProps} />
     </section>
   );
 };

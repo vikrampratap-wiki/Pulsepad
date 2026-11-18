@@ -14,7 +14,10 @@ import {
   sanitizeRoomId,
   getOrCreatePersistentRoomId,
 } from './gamepadProtocol';
-import { generateCloudGamingBridgeSnippets } from './w3cGamepadBridge';
+import {
+  generateCloudGamingBridgeSnippets,
+  parseBridgeHexFrame,
+} from './w3cGamepadBridge';
 import {
   CONTROLLER_THEME_PRESETS,
   DEFAULT_CONTROLLER_THEME,
@@ -219,5 +222,32 @@ test('generateSecureNumericRoomId creates unique 10-digit numeric IDs and persis
   const secondVisitId = getOrCreatePersistentRoomId(null, mockStorage);
   assert.equal(firstVisitId, secondVisitId);
 });
+
+test('parseBridgeHexFrame decodes 12-byte phone controller packets accurately for Xbox Cloud Gaming', () => {
+  const state = createInitialGamepadState('xbox');
+  state.buttons[0] = 1; // A
+  state.buttons[6] = 0.5; // LT
+  state.buttons[7] = 1; // RT
+  state.buttons[16] = 1; // Xbox Guide
+  state.axes = [-0.5, 0.75, 0.25, -1];
+  state.sequence = 512;
+
+  const bytes = encodeGamepadPacket(state);
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const parsed = parseBridgeHexFrame(hex);
+  assert.ok(parsed);
+  assert.equal(parsed.buttons[0], 1);
+  assert.equal(parsed.buttons[16], 1);
+  assert.ok(Math.abs(parsed.buttons[6] - 0.5) <= 0.02);
+  assert.equal(parsed.buttons[7], 1);
+  assert.ok(Math.abs(parsed.axes[0] - -0.5) <= 0.02);
+  assert.ok(Math.abs(parsed.axes[1] - 0.75) <= 0.02);
+  assert.ok(Math.abs(parsed.axes[3] - -1) <= 0.02);
+  assert.equal(parsed.sequence, 512);
+});
+
 
 

@@ -8,16 +8,14 @@ import {
   resolveRelayBackendOrigin,
   sanitizeRoomId,
 } from '../protocol/gamepadProtocol';
-import { generateCloudGamingBridgeSnippets } from '../protocol/w3cGamepadBridge';
 import { PeerInfo } from '../hooks/usePulsePadTransport';
+import { ExternalGamingBridgeDrawer } from './controller/ExternalGamingBridgeDrawer';
 import {
   QrCode,
   Copy,
   Check,
   Smartphone,
-  Tv,
   Activity,
-  ExternalLink,
   RefreshCw,
 } from 'lucide-react';
 
@@ -56,7 +54,6 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
 
   const appOrigin = resolveRelayBackendOrigin();
   const controllerPairUrl = buildControllerPairUrl(roomCode);
-  const bridgeSnippets = generateCloudGamingBridgeSnippets(roomCode, appOrigin);
   const formattedRoom = formatRoomIdDisplay(roomCode);
 
   useEffect(() => {
@@ -322,82 +319,8 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
         </div>
       </div>
 
-      {/* Xbox Cloud Gaming / GeForce NOW / Browser Game Bridge Injector */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-base font-display font-bold text-white flex items-center gap-2">
-              <Tv className="w-4 h-4 text-amber-400" />
-              <span>
-                Xbox Cloud Gaming, GeForce NOW और किसी भी वेब गेम में कैसे चलाएं (Universal Cloud Bridge)
-              </span>
-            </h3>
-            <p className="text-xs text-slate-300">
-              जब आप टैबलेट पर <code className="text-amber-300">xbox.com/play</code> या कोई भी क्लाउड गेम खोलें, तो यह ब्रिज स्क्रिप्ट आपके फ़ोन के इनपुट को सीधे उस टैब के{' '}
-              <code className="text-emerald-300">navigator.getGamepads()</code> में जोड़ देती है।
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleCopy('bookmarklet', bridgeSnippets.bookmarkletHref)}
-              className="min-h-[40px] px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              {copiedKey === 'bookmarklet' ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Bookmarklet Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Cloud Bookmarklet</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleCopy('console', bridgeSnippets.consoleSnippet)}
-              className="min-h-[40px] px-3.5 py-2 rounded-lg bg-slate-950 border border-slate-700 hover:border-slate-500 text-slate-200 font-medium text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-            >
-              {copiedKey === 'console' ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Script Copied!</span>
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Copy Console Injector</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col gap-1">
-            <span className="font-semibold text-white">01. टैबलेट पर क्लाउड गेम खोलें</span>
-            <p className="text-slate-400 leading-relaxed">
-              अपने टैबलेट के ब्राउज़र में Xbox Cloud Gaming, GeForce NOW, या कोई भी वेब गेम खोलें और ऊपर दिया Bookmarklet सेव करें।
-            </p>
-          </div>
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col gap-1">
-            <span className="font-semibold text-white">02. फ़ोन पर कंट्रोलर खोलें</span>
-            <p className="text-slate-400 leading-relaxed">
-              अपने फ़ोन पर QR कोड स्कैन करें ताकि आपका फ़ोन रूम <strong className="text-amber-400 font-mono">{roomCode}</strong> से जुड़ जाए।
-            </p>
-          </div>
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col gap-1">
-            <span className="font-semibold text-white">03. 10–15ms में बिना रुकावट खेलें</span>
-            <p className="text-slate-400 leading-relaxed">
-              टैबलेट पर Bookmarklet पर टैप करते ही Xbox/PS5 कंट्रोलर डिटेक्ट हो जाएगा और आप तुरंत गेम खेल सकते हैं।
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Tablet Direct Xbox Cloud Gaming (xbox.com/play) & Universal Bridge Hub */}
+      <ExternalGamingBridgeDrawer roomCode={roomCode} appOrigin={appOrigin} />
     </div>
   );
 };

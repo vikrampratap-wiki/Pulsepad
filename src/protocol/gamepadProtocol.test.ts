@@ -98,10 +98,15 @@ test('transport simulator shows sub-15ms P50 UDP latency and 95%+ binary bandwid
 });
 
 test('external gaming website bridge generates valid userscript, bookmarklet, and console script', () => {
-  const snippets = generateCloudGamingBridgeSnippets('8492310756', 'https://pulsepad.example.com');
-  assert.ok(snippets.scriptUrl.includes('room=8492310756'));
-  assert.ok(snippets.bookmarkletHref.startsWith('javascript:'));
-  assert.ok(snippets.consoleSnippet.includes('Gamepad.prototype'));
+  const snippets = generateCloudGamingBridgeSnippets('3141339400', 'https://vikrampratap-wiki.github.io/Pulsepad');
+  assert.ok(snippets.scriptUrl.includes('room=3141339400'));
+  assert.ok(snippets.bookmarkletHref.startsWith('javascript:(function(){'));
+  assert.ok(snippets.bookmarkletHref.endsWith('})();'));
+  assert.ok(
+    snippets.bookmarkletHref.length < 1995,
+    `Expected compact bookmarklet < 1995 chars for Tablet URL bar, got ${snippets.bookmarkletHref.length}`
+  );
+  assert.ok(snippets.consoleSnippet.includes('Gamepad?.prototype'));
   assert.ok(snippets.consoleSnippet.includes('bridge=1&room='));
   assert.ok(snippets.userscriptContent.includes('// ==UserScript=='));
   assert.ok(snippets.userscriptContent.includes('*://*.xbox.com/*'));

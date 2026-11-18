@@ -107,16 +107,15 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
           <div className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold text-emerald-400">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>
-              TABLET XBOX CLOUD GAMING (xbox.com/play) DIRECT BRIDGE v6 · ID: {formattedRoom}
+              TABLET XBOX CLOUD GAMING (xbox.com/play) COMPACT BRIDGE v7 · ID: {formattedRoom} ({bridgeSnippets.bookmarkletHref.length} chars)
             </span>
           </div>
           <h3 className="text-sm sm:text-base font-display font-bold text-white">
-            टैबलेट पर Xbox का "Controller not connected" निशान हटाने और बटन चलाने का v6 समाधान:
+            बुकमार्क में कोड अधूरा कटने (Truncate होने) की समस्या अब v7 Compact कोड से 100% हल!
           </h3>
           <p className="text-xs text-slate-300 leading-relaxed">
-            <strong className="text-amber-300">पहले बटन क्यों नहीं चले?</strong> Chrome ब्राउज़र में कृत्रिम{' '}
-            <code>new GamepadEvent</code> पर WebIDL त्रुटि आ रही थी और Xbox का फ़ायरवॉल बाहरी सिग्नल रोक रहा था। नए{' '}
-            <strong className="text-emerald-400">v6 Tablet Bridge</strong> में हमने इसे पूरी तरह ठीक कर दिया है—नीचे से नया कोड कॉपी करके अपने बुकमार्क को एक बार अपडेट कर लें!
+            <strong className="text-amber-300">पहले कोड आधा क्यों कट गया था?</strong> टैबलेट के बुकमार्क URL बॉक्स में ~4,000 अक्षरों की सीमा होती है और पुराना कोड 4,850 अक्षरों का होने के कारण <code>KeyboardEvent</code> पर कट रहा था। नया{' '}
+            <strong className="text-emerald-400">v7 Ultra-Compact Code केवल {bridgeSnippets.bookmarkletHref.length} अक्षरों</strong> का है और इसके अंत में <code>&#125;)();</code> पूरा आता है!
           </p>
         </div>
 
@@ -130,12 +129,12 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             {copiedId === 'bm' ? (
               <>
                 <Check className="w-3.5 h-3.5" />
-                <span>v6 Xbox Code Copied!</span>
+                <span>v7 Compact Code Copied!</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>Step 1: Copy NEW v6 Xbox Code</span>
+                <span>Step 1: Copy v7 Compact Code ({bridgeSnippets.bookmarkletHref.length} chars)</span>
               </>
             )}
           </button>
@@ -174,14 +173,37 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
         </div>
       </div>
 
+      {/* Direct Full Bookmarklet Code Box so user can inspect and verify it ends with })(); */}
+      <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="font-mono text-emerald-400 font-semibold">
+            ✓ पूरा v7 बुकमार्क कोड (अंत में <code className="text-amber-300">&#125;)();</code> अवश्य जांचें — कुल {bridgeSnippets.bookmarkletHref.length} अक्षर):
+          </span>
+          <button
+            type="button"
+            onClick={() => handleCopy('bm-box', bridgeSnippets.bookmarkletHref)}
+            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold hover:bg-emerald-500/30 transition-colors"
+          >
+            {copiedId === 'bm-box' ? '✓ कॉपी हो गया!' : 'पूरा कोड कॉपी करें'}
+          </button>
+        </div>
+        <textarea
+          readOnly
+          rows={2}
+          value={bridgeSnippets.bookmarkletHref}
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full p-2 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono text-slate-300 select-all focus:outline-none focus:border-emerald-500"
+        />
+      </div>
+
       {/* Step-by-Step Tablet Instructions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
         <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/40 flex flex-col gap-1.5">
           <span className="font-bold text-amber-400">
-            कदम 1: अपना बुकमार्क नए v6 कोड से अपडेट करें
+            कदम 1: बुकमार्क में पुराना अधूरा कोड हटाकर नया v7 पेस्ट करें
           </span>
           <p className="text-slate-300 leading-relaxed">
-            ऊपर <strong className="text-amber-300">Step 1: Copy NEW v6 Xbox Code</strong> दबाएं और अपने टैबलेट के <code className="text-emerald-300 font-bold">xboxpad</code> बुकमार्क को Edit करके उसमें यह नया v6 कोड पेस्ट कर दें (पुराने कोड में Chrome का इवेंट ब्लॉक हो रहा था, जो अब ठीक हो चुका है)।
+            अपने टैबलेट के <code className="text-emerald-300 font-bold">xboxpad</code> बुकमार्क को Edit करें, पुराने अधूरे कोड को <strong className="text-white">Select All करके पूरी तरह मिटा दें</strong>, और यह नया छोटा v7 कोड पेस्ट करें (जिसके अंत में <code className="text-amber-300">&#125;)();</code> है)।
           </p>
         </div>
 
@@ -191,7 +213,7 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             <span>कदम 2: इसी पेज से xbox.com/play खोलें</span>
           </span>
           <p className="text-slate-300 leading-relaxed">
-            टैबलेट पर इस PulsePad टैब को <strong className="text-white">बंद मत करें</strong>! ऊपर हरे बटन <strong className="text-emerald-300">Step 2: यहाँ से xbox.com/play खोलें ↗</strong> पर टैप करें—इससे दोनों टैब आपस में जुड़ जाएंगे और Xbox का फ़ायरवॉल आपके फ़ोन के बटनों को नहीं रोक पाएगा।
+            टैबलेट पर इस PulsePad टैब को <strong className="text-white">बंद मत करें</strong>! ऊपर हरे बटन <strong className="text-emerald-300">Step 2: यहाँ से xbox.com/play खोलें ↗</strong> पर टैप करें—इससे दोनों टैब आपस में सीधे जुड़ जाएंगे।
           </p>
         </div>
 
@@ -200,7 +222,7 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             कदम 3: URL पट्टी में xboxpad चलाएं
           </span>
           <p className="text-slate-300 leading-relaxed">
-            अब <strong className="text-white">xbox.com/play</strong> वाले टैब की ऊपरी URL पट्टी में <code className="text-emerald-300 font-bold">xboxpad</code> लिखकर नीचे आने वाले ★ सुझाव पर टैप करें। कोने में <code className="text-emerald-300">🎮 Xbox Pad LIVE (Pkt #...)</code> दिखते ही Xbox का कंट्रोलर निशान तुरंत चालू हो जाएगा!
+            अब <strong className="text-white">xbox.com/play</strong> वाले टैब की ऊपरी URL पट्टी में <code className="text-emerald-300 font-bold">xboxpad</code> लिखकर नीचे आने वाले ★ सुझाव पर टैप करें। कोने में <code className="text-emerald-300">🎮 Xbox Pad LIVE (Pkt #...)</code> दिखते ही सभी बटन तुरंत काम करेंगे!
           </p>
         </div>
       </div>

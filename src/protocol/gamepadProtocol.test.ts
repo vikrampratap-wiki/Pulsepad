@@ -29,6 +29,7 @@ import {
 import {
   createDefaultLayoutMap,
   createPresetLayoutMap,
+  getControllerOrientationMode,
   loadControllerLayoutFromStorage,
   saveControllerLayoutToStorage,
 } from './controllerLayoutPositions';
@@ -254,5 +255,21 @@ test('parseBridgeHexFrame decodes 12-byte phone controller packets accurately fo
   assert.equal(parsed.sequence, 512);
 });
 
+test('getControllerOrientationMode accurately detects mobile landscape vs portrait viewports', () => {
+  // Mobile landscape viewports mentioned in acceptance criteria (667x375, 844x390, 896x414, 915x412)
+  assert.equal(getControllerOrientationMode(667, 375), 'landscape');
+  assert.equal(getControllerOrientationMode(844, 390), 'landscape');
+  assert.equal(getControllerOrientationMode(896, 414), 'landscape');
+  assert.equal(getControllerOrientationMode(915, 412), 'landscape');
+  assert.equal(getControllerOrientationMode(800, 480), 'landscape');
+  assert.equal(getControllerOrientationMode(568, 320), 'landscape');
 
+  // Mobile portrait viewports (390x844, 414x896)
+  assert.equal(getControllerOrientationMode(390, 844), 'portrait');
+  assert.equal(getControllerOrientationMode(414, 896), 'portrait');
+  assert.equal(getControllerOrientationMode(375, 667), 'portrait');
 
+  // Tablet and desktop screens
+  assert.equal(getControllerOrientationMode(1024, 768), 'portrait');
+  assert.equal(getControllerOrientationMode(1920, 1080), 'portrait');
+});

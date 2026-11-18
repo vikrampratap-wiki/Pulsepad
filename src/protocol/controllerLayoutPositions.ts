@@ -5,6 +5,22 @@
 
 export const PULSEPAD_LAYOUT_POSITIONS_KEY = 'pulsepad_layout_positions_v1';
 
+export type ControllerOrientationMode = 'portrait' | 'landscape';
+
+/**
+ * Determines whether a viewport should render in compact landscape mode.
+ * Viewports with height < 500px or wide aspect ratios with height <= 600px
+ * are treated as landscape to ensure gamepad controls fit with zero vertical scrolling.
+ */
+export function getControllerOrientationMode(
+  width: number,
+  height: number
+): ControllerOrientationMode {
+  if (height < 500) return 'landscape';
+  if (width > height && height <= 600) return 'landscape';
+  return 'portrait';
+}
+
 export type CustomizableModuleId =
   | 'leftShoulder'
   | 'rightShoulder'

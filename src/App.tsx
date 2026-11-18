@@ -5,6 +5,7 @@ import {
   generateSecureNumericRoomId,
   getOrCreatePersistentRoomId,
 } from './protocol/gamepadProtocol';
+import { getControllerOrientationMode } from './protocol/controllerLayoutPositions';
 import { ControllerRemotePage } from './pages/ControllerRemotePage';
 import { TabletHostStudioPage } from './pages/TabletHostStudioPage';
 import { CloudArenaPage } from './pages/CloudArenaPage';
@@ -33,14 +34,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveWorkspaceTab>(() => parseTabFromLocation());
 
   // Single-Screen Controller Lock Mode (1-Screen Full Mode: zero vertical scroll on mobile!)
-  // Automatically enabled when opened via QR (?mode=controller) or on mobile phone screens (<768px)
+  // Automatically enabled when opened via QR (?mode=controller), on mobile phone screens (<768px),
+  // or on mobile landscape orientation (viewport height < 500px).
   const [pureControllerOnly, setPureControllerOnly] = useState<boolean>(() => {
     if (initialModeParam === 'controller') return true;
     if (
       typeof window !== 'undefined' &&
       !initialModeParam &&
       !autostartArena &&
-      window.innerWidth < 768
+      (window.innerWidth < 768 ||
+        window.innerHeight < 500 ||
+        getControllerOrientationMode(window.innerWidth, window.innerHeight) === 'landscape')
     ) {
       return true;
     }

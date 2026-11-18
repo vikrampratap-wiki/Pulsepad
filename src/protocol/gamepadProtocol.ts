@@ -310,7 +310,7 @@ export function buildControllerPairUrl(
   pathname?: string
 ): string {
   const baseUrl = resolveAppBaseUrl(origin, pathname);
-  const safeRoom = (roomCode || 'PULSE1').trim().toUpperCase() || 'PULSE1';
+  const safeRoom = sanitizeRoomId(roomCode) || generateSecureNumericRoomId();
   return `${baseUrl}/?mode=controller&room=${encodeURIComponent(safeRoom)}`;
 }
 
@@ -330,3 +330,88 @@ export function resolveRelayBackendOrigin(origin?: string): string {
   }
   return rawOrigin.replace(/\/+$/, '');
 }
+
+export const PULSEPAD_PRIVATE_ROOM_KEY = 'pulsepad_private_room_id_v1';
+
+/**
+ * Generates a cryptographically random 10-digit numeric Room ID (e.g. "8492310756")
+ * with 9 billion possible values so strangers cannot guess or collide with a user's room.
+ */
+export function generateSecureNumericRoomId(): string {
+  const bytes = new Uint32Array(3);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    bytes[0] = Math.floor(Math.random() * 0xffffffff);
+    bytes[1] = Math.floor(Math.random() * 0xffffffff);
+    bytes[2] = Math.floor(Math.random() * 0xffffffff);
+  }
+
+  // First digit 1-9, followed by 9 digits 0-9 -> 10 digits total
+  const firstDigit = (bytes[0] % 9) + 1;
+  const partA = String(bytes[1] % 100000).padStart(5, '0');
+  const partB = String(bytes[2] % 10000).padStart(4, '0');
+  return `${firstDigit}${partA}${partB}`;
+}
+
+/**
+ * Normalizes a room ID by stripping hyphens/spaces and keeping up to 14 digits/characters.
+ */
+export function sanitizeRoomId(raw: string | null | undefined): string {
+  if (!raw) return '';
+  return raw
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 14);
+}
+
+/**
+ * Formats a 10-digit numeric Room ID like "8492310756" into "8492-310-756" for easy reading.
+ */
+export function formatRoomIdDisplay(roomCode: string): string {
+  const clean = sanitizeRoomId(roomCode);
+  if (/^\d{10}$/.test(clean)) {
+    return `${clean.slice(0, 4)}-${clean.slice(4, 7)}-${clean.slice(7, 10)}`;
+  }
+  return clean;
+}
+
+/**
+ * Retrieves the room ID from URL parameters (when scanned from QR code) or loads/creates
+ * a unique persistent 10-digit numeric Room ID in localStorage for each user.
+ */
+export function getOrCreatePersistentRoomId(
+  urlRoomParam?: string | null,
+  storage?: Pick<Storage, 'getItem' | 'setItem'> | null
+): string {
+  const fromUrl = sanitizeRoomId(urlRoomParam);
+  if (fromUrl.length >= 4) {
+    return fromUrl;
+  }
+
+  const targetStorage =
+    storage !== undefined
+      ? storage
+      : typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage
+        : null;
+
+  try {
+    const saved = sanitizeRoomId(targetStorage?.getItem(PULSEPAD_PRIVATE_ROOM_KEY));
+    if (saved && saved.length >= 6 && saved !== 'PULSE1') {
+      return saved;
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+
+  const freshId = generateSecureNumericRoomId();
+  try {
+    targetStorage?.setItem(PULSEPAD_PRIVATE_ROOM_KEY, freshId);
+  } catch {
+    // Ignore storage write errors
+  }
+  return freshId;
+}
+

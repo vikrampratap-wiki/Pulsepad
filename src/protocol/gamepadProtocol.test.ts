@@ -9,6 +9,10 @@ import {
   formatPacketHex,
   resolveAppBaseUrl,
   buildControllerPairUrl,
+  generateSecureNumericRoomId,
+  formatRoomIdDisplay,
+  sanitizeRoomId,
+  getOrCreatePersistentRoomId,
 } from './gamepadProtocol';
 import { generateCloudGamingBridgeSnippets } from './w3cGamepadBridge';
 import {
@@ -91,9 +95,11 @@ test('transport simulator shows sub-15ms P50 UDP latency and 95%+ binary bandwid
 });
 
 test('external gaming website bridge generates valid userscript, bookmarklet, and console script', () => {
-  const snippets = generateCloudGamingBridgeSnippets('ROOM77', 'https://pulsepad.example.com');
-  assert.ok(snippets.scriptUrl.includes('room=ROOM77'));
+  const snippets = generateCloudGamingBridgeSnippets('8492310756', 'https://pulsepad.example.com');
+  assert.ok(snippets.scriptUrl.includes('room=8492310756'));
   assert.ok(snippets.bookmarkletHref.startsWith('javascript:'));
+  assert.ok(snippets.consoleSnippet.includes('Gamepad.prototype'));
+  assert.ok(snippets.consoleSnippet.includes('bridge=1&room='));
   assert.ok(snippets.userscriptContent.includes('// ==UserScript=='));
   assert.ok(snippets.userscriptContent.includes('*://*.xbox.com/*'));
 });
@@ -181,12 +187,37 @@ test('buildControllerPairUrl preserves GitHub Pages repository subpath (/Pulsepa
     'https://vikrampratap-wiki.github.io/Pulsepad'
   );
   assert.equal(
-    buildControllerPairUrl('pulse1', 'https://vikrampratap-wiki.github.io', '/Pulsepad/'),
-    'https://vikrampratap-wiki.github.io/Pulsepad/?mode=controller&room=PULSE1'
+    buildControllerPairUrl('8492-310-756', 'https://vikrampratap-wiki.github.io', '/Pulsepad/'),
+    'https://vikrampratap-wiki.github.io/Pulsepad/?mode=controller&room=8492310756'
   );
   assert.equal(
     buildControllerPairUrl('PULSE1', 'http://localhost:3000', '/'),
     'http://localhost:3000/?mode=controller&room=PULSE1'
   );
 });
+
+test('generateSecureNumericRoomId creates unique 10-digit numeric IDs and persists per user', () => {
+  const id1 = generateSecureNumericRoomId();
+  const id2 = generateSecureNumericRoomId();
+  assert.match(id1, /^[1-9][0-9]{9}$/);
+  assert.match(id2, /^[1-9][0-9]{9}$/);
+  assert.notEqual(id1, id2);
+
+  assert.equal(formatRoomIdDisplay('8492310756'), '8492-310-756');
+  assert.equal(sanitizeRoomId('8492-310-756'), '8492310756');
+
+  const memoryStore = new Map<string, string>();
+  const mockStorage = {
+    getItem: (k: string) => memoryStore.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      memoryStore.set(k, v);
+    },
+  };
+
+  const firstVisitId = getOrCreatePersistentRoomId(null, mockStorage);
+  assert.match(firstVisitId, /^[1-9][0-9]{9}$/);
+  const secondVisitId = getOrCreatePersistentRoomId(null, mockStorage);
+  assert.equal(firstVisitId, secondVisitId);
+});
+
 

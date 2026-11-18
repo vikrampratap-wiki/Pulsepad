@@ -17,6 +17,7 @@ interface TabletHostStudioPageProps extends TouchControllerPadProps {
 export const TabletHostStudioPage: React.FC<TabletHostStudioPageProps> = ({
   roomCode,
   onRoomCodeChange,
+  onGenerateNewRoomId,
   gamepadState,
   wsConnected = false,
   webrtcConnected = false,
@@ -33,6 +34,7 @@ export const TabletHostStudioPage: React.FC<TabletHostStudioPageProps> = ({
       <TabletReceiverTelemetry
         roomCode={roomCode}
         onRoomCodeChange={onRoomCodeChange || (() => {})}
+        onGenerateNewRoomId={onGenerateNewRoomId}
         gamepadState={gamepadState}
         wsConnected={wsConnected}
         webrtcConnected={webrtcConnected}
@@ -47,6 +49,7 @@ export const TabletHostStudioPage: React.FC<TabletHostStudioPageProps> = ({
       <TouchControllerPad
         roomCode={roomCode}
         onRoomCodeChange={onRoomCodeChange}
+        onGenerateNewRoomId={onGenerateNewRoomId}
         gamepadState={gamepadState}
         wsConnected={wsConnected}
         webrtcConnected={webrtcConnected}

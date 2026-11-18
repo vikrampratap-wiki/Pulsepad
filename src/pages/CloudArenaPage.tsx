@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { CloudGamingSandbox } from '../components/CloudGamingSandbox';
 import { TouchControllerPad, TouchControllerPadProps } from '../components/TouchControllerPad';
-import { BUTTON_METADATA, buildControllerPairUrl } from '../protocol/gamepadProtocol';
-import { QrCode, Smartphone, Wifi, Copy, Check } from 'lucide-react';
+import {
+  BUTTON_METADATA,
+  buildControllerPairUrl,
+  formatRoomIdDisplay,
+  sanitizeRoomId,
+} from '../protocol/gamepadProtocol';
+import { QrCode, Smartphone, Wifi, Copy, Check, RefreshCw } from 'lucide-react';
 
 interface CloudArenaPageProps extends TouchControllerPadProps {
   autostart?: boolean;
@@ -21,6 +26,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
   const {
     roomCode,
     onRoomCodeChange,
+    onGenerateNewRoomId,
     gamepadState,
     peersCount = 1,
     webrtcConnected = false,
@@ -33,6 +39,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
 
   const pairUrl = buildControllerPairUrl(roomCode);
   const isPhoneLinked = peersCount >= 2 || webrtcConnected;
+  const formattedRoom = formatRoomIdDisplay(roomCode);
 
   useEffect(() => {
     setRoomInput(roomCode);
@@ -78,7 +85,7 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
               <span>
                 {isPhoneLinked
                   ? `PHONE CONTROLLER CONNECTED (${peersCount} Devices · ${rttMs.toFixed(1)}ms)`
-                  : `WAITING FOR PHONE IN ROOM: ${roomCode}`}
+                  : `WAITING FOR PHONE IN PRIVATE ROOM ID: ${formattedRoom}`}
               </span>
             </span>
 
@@ -100,30 +107,42 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (roomInput.trim()) {
-                    onRoomCodeChange(roomInput.trim().toUpperCase());
+                  const clean = sanitizeRoomId(roomInput);
+                  if (clean) {
+                    onRoomCodeChange(clean);
                   }
                 }}
                 className="inline-flex items-center gap-1.5"
               >
                 <label htmlFor="arena-room-input" className="text-xs text-slate-400 font-mono">
-                  Room:
+                  10-Digit ID:
                 </label>
                 <input
                   id="arena-room-input"
                   type="text"
-                  maxLength={10}
+                  maxLength={14}
                   value={roomInput}
                   onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
-                  className="w-24 min-h-[36px] px-2.5 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-xs text-amber-400 uppercase"
+                  className="w-32 min-h-[36px] px-2.5 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-xs text-amber-400 uppercase"
                 />
                 <button
                   type="submit"
                   className="min-h-[36px] px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs whitespace-nowrap shrink-0"
                 >
-                  Set Room
+                  Set ID
                 </button>
               </form>
+            )}
+
+            {onGenerateNewRoomId && (
+              <button
+                type="button"
+                onClick={onGenerateNewRoomId}
+                className="min-h-[36px] px-3 rounded-lg bg-slate-950 border border-slate-700 hover:border-amber-400 text-amber-300 text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>नया गुप्त ID (New 10-Digit ID)</span>
+              </button>
             )}
 
             <button
@@ -166,10 +185,10 @@ export const CloudArenaPage: React.FC<CloudArenaPageProps> = ({
               <QrCode className="w-7 h-7 text-amber-400" />
             </div>
           )}
-          <div className="flex flex-col gap-1 text-xs max-w-[155px]">
-            <span className="font-mono font-bold text-amber-400">ROOM: {roomCode}</span>
+          <div className="flex flex-col gap-1 text-xs max-w-[165px]">
+            <span className="font-mono font-bold text-amber-400">ID: {formattedRoom}</span>
             <span className="text-[11px] text-slate-300 leading-snug">
-              फ़ोन से स्कैन करते ही आपका फ़ोन इस गेम का रिमोट बन जाएगा।
+              फ़ोन से स्कैन करते ही आपका फ़ोन इस गुप्त ID के साथ गेम का रिमोट बन जाएगा।
             </span>
           </div>
         </div>

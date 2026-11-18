@@ -4,7 +4,9 @@ import {
   BUTTON_METADATA,
   VirtualGamepadState,
   buildControllerPairUrl,
+  formatRoomIdDisplay,
   resolveRelayBackendOrigin,
+  sanitizeRoomId,
 } from '../protocol/gamepadProtocol';
 import { generateCloudGamingBridgeSnippets } from '../protocol/w3cGamepadBridge';
 import { PeerInfo } from '../hooks/usePulsePadTransport';
@@ -16,11 +18,13 @@ import {
   Tv,
   Activity,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 
 interface TabletReceiverTelemetryProps {
   roomCode: string;
   onRoomCodeChange: (nextRoom: string) => void;
+  onGenerateNewRoomId?: () => void;
   gamepadState: VirtualGamepadState;
   wsConnected: boolean;
   webrtcConnected: boolean;
@@ -35,6 +39,7 @@ interface TabletReceiverTelemetryProps {
 export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = ({
   roomCode,
   onRoomCodeChange,
+  onGenerateNewRoomId,
   gamepadState,
   wsConnected,
   webrtcConnected,
@@ -52,6 +57,7 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
   const appOrigin = resolveRelayBackendOrigin();
   const controllerPairUrl = buildControllerPairUrl(roomCode);
   const bridgeSnippets = generateCloudGamingBridgeSnippets(roomCode, appOrigin);
+  const formattedRoom = formatRoomIdDisplay(roomCode);
 
   useEffect(() => {
     setRoomInput(roomCode);
@@ -96,7 +102,7 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
         <div className="lg:col-span-7 rounded-2xl border border-slate-800 bg-slate-900 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
           <div className="flex flex-col gap-3 flex-1">
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span>Phone-to-Tablet Pairing</span>
+              <span>Phone-to-Tablet Pairing (10-Digit Private ID)</span>
               <span aria-hidden="true">·</span>
               <span>
                 {webrtcConnected
@@ -112,15 +118,16 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
             </h2>
 
             <p className="text-sm text-slate-300 leading-relaxed">
-              अपने टैबलेट पर यह स्क्रीन खुली रखें और अपने फ़ोन पर QR कोड स्कैन करें या यही{' '}
-              <strong className="text-amber-400 font-mono">{roomCode}</strong> रूम कोड डालें।
+              अपने टैबलेट पर यह स्क्रीन खुली रखें और अपने फ़ोन पर QR कोड स्कैन करें या यही गुप्त 10-अंक रूम ID{' '}
+              <strong className="text-amber-400 font-mono">{formattedRoom}</strong> डालें।
             </p>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (roomInput.trim()) {
-                  onRoomCodeChange(roomInput.trim().toUpperCase());
+                const clean = sanitizeRoomId(roomInput);
+                if (clean) {
+                  onRoomCodeChange(clean);
                 }
               }}
               className="flex flex-wrap items-center gap-2 pt-1"
@@ -131,18 +138,28 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
               <input
                 id="room-code-input"
                 type="text"
-                maxLength={10}
+                maxLength={14}
                 value={roomInput}
                 onChange={(e) => setRoomInput(e.target.value.toUpperCase())}
-                placeholder="ROOM CODE"
-                className="w-32 min-h-[42px] px-3 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-sm text-amber-400 uppercase focus:outline-none focus:border-amber-400"
+                placeholder="10-DIGIT ID"
+                className="w-36 min-h-[42px] px-3 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-sm text-amber-400 uppercase focus:outline-none focus:border-amber-400"
               />
               <button
                 type="submit"
                 className="min-h-[42px] px-4 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-colors whitespace-nowrap shrink-0"
               >
-                Switch Room
+                Switch ID
               </button>
+              {onGenerateNewRoomId && (
+                <button
+                  type="button"
+                  onClick={onGenerateNewRoomId}
+                  className="min-h-[42px] px-3.5 rounded-lg bg-slate-950 border border-slate-700 hover:border-amber-400 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>नया गुप्त ID</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleCopy('pairUrl', controllerPairUrl)}
@@ -183,11 +200,11 @@ export const TabletReceiverTelemetry: React.FC<TabletReceiverTelemetryProps> = (
             ) : (
               <div className="w-32 h-32 rounded-lg bg-slate-900 flex flex-col items-center justify-center text-slate-400 gap-1">
                 <QrCode className="w-8 h-8 text-amber-400" />
-                <span className="text-[11px] font-mono">{roomCode}</span>
+                <span className="text-[11px] font-mono">{formattedRoom}</span>
               </div>
             )}
             <span className="text-[11px] font-mono text-slate-400">
-              Scan on Phone ({roomCode})
+              Scan on Phone ({formattedRoom})
             </span>
           </div>
         </div>

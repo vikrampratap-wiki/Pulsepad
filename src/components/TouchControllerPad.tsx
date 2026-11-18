@@ -5,7 +5,9 @@ import {
   StickCalibrationConfig,
   VirtualGamepadState,
   buildControllerPairUrl,
+  formatRoomIdDisplay,
   resolveRelayBackendOrigin,
+  sanitizeRoomId,
 } from '../protocol/gamepadProtocol';
 import {
   ControllerThemeConfig,
@@ -28,6 +30,7 @@ import { ControllerThemePickerDrawer } from './controller/ControllerThemePickerD
 import { ControllerLayoutEditorDrawer } from './controller/ControllerLayoutEditorDrawer';
 import { ControllerOptionsDrawer } from './controller/ControllerOptionsDrawer';
 import { ExternalGamingBridgeDrawer } from './controller/ExternalGamingBridgeDrawer';
+import { ActiveWorkspaceTab } from '../App';
 import {
   Compass,
   Zap,
@@ -39,6 +42,8 @@ import {
   Move,
   Wifi,
   Smartphone,
+  RefreshCw,
+  X,
 } from 'lucide-react';
 
 export type ControllerGripLayout = 'console_shell' | 'split_edge' | 'arcade_fightpad';
@@ -46,6 +51,7 @@ export type ControllerGripLayout = 'console_shell' | 'split_edge' | 'arcade_figh
 export interface TouchControllerPadProps {
   roomCode: string;
   onRoomCodeChange?: (nextRoom: string) => void;
+  onGenerateNewRoomId?: () => void;
   gamepadState: VirtualGamepadState;
   calibration: StickCalibrationConfig;
   onCalibrationChange: React.Dispatch<React.SetStateAction<StickCalibrationConfig>>;
@@ -62,11 +68,14 @@ export interface TouchControllerPadProps {
   peersCount?: number;
   isPureControllerOnly?: boolean;
   onTogglePureControllerOnly?: () => void;
+  activeTab?: ActiveWorkspaceTab;
+  onNavigateTab?: (tab: ActiveWorkspaceTab) => void;
 }
 
 export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
   roomCode,
   onRoomCodeChange,
+  onGenerateNewRoomId,
   gamepadState,
   calibration,
   onCalibrationChange,
@@ -83,6 +92,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
   peersCount = 1,
   isPureControllerOnly = false,
   onTogglePureControllerOnly,
+  onNavigateTab,
 }) => {
   const leftStickRef = useRef<HTMLDivElement | null>(null);
   const rightStickRef = useRef<HTMLDivElement | null>(null);
@@ -181,6 +191,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
   const shellClasses = getShellThemeClasses(theme.shellTheme);
   const borderAlpha = theme.borderOpacityPercent / 100;
   const isTabletPaired = peersCount >= 2 || webrtcConnected;
+  const formattedRoomId = formatRoomIdDisplay(roomCode);
 
   const appOrigin = resolveRelayBackendOrigin();
   const controllerPairUrl = buildControllerPairUrl(roomCode);
@@ -314,10 +325,10 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
       accent-color: ${theme.triggerAccentHex};
     }
     .pad-stick-left-pos {
-      transform: translate3d(${(gamepadState.axes[0] * 30).toFixed(1)}px, ${(gamepadState.axes[1] * 30).toFixed(1)}px, 0);
+      transform: translate3d(${(gamepadState.axes[0] * 24).toFixed(1)}px, ${(gamepadState.axes[1] * 24).toFixed(1)}px, 0);
     }
     .pad-stick-right-pos {
-      transform: translate3d(${(gamepadState.axes[2] * 30).toFixed(1)}px, ${(gamepadState.axes[3] * 30).toFixed(1)}px, 0);
+      transform: translate3d(${(gamepadState.axes[2] * 24).toFixed(1)}px, ${(gamepadState.axes[3] * 24).toFixed(1)}px, 0);
     }
     .pad-deadzone-ring {
       width: ${Math.max(12, Math.round(calibration.deadzone * 100))}%;
@@ -378,7 +389,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         }}
         className={`relative transition-shadow pad-pos-${moduleId} ${extraClassName} ${
           isDragModeActive
-            ? `cursor-move select-none rounded-2xl p-1.5 border-2 border-dashed ${
+            ? `cursor-move select-none rounded-2xl p-1 border-2 border-dashed ${
                 isSelected
                   ? 'border-amber-400 bg-amber-500/10 z-30 shadow-lg'
                   : 'border-amber-500/50 bg-slate-950/40 z-20 hover:border-amber-400'
@@ -387,10 +398,10 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         }`}
       >
         {isDragModeActive && (
-          <div className="flex items-center justify-between gap-2 px-2 py-0.5 mb-1 rounded-md bg-amber-500 text-slate-950 text-[10px] font-mono font-bold pointer-events-none">
-            <span className="truncate">DRAG: {MODULE_LABELS[moduleId]}</span>
+          <div className="flex items-center justify-between gap-1 px-1.5 py-0.5 mb-0.5 rounded bg-amber-500 text-slate-950 text-[9px] font-mono font-bold pointer-events-none">
+            <span className="truncate">{MODULE_LABELS[moduleId]}</span>
             <span className="tabular-nums shrink-0">
-              {offset.dx > 0 ? `+${offset.dx}` : offset.dx},{offset.dy > 0 ? `+${offset.dy}` : offset.dy}px
+              {offset.dx > 0 ? `+${offset.dx}` : offset.dx},{offset.dy > 0 ? `+${offset.dy}` : offset.dy}
             </span>
           </div>
         )}
@@ -411,12 +422,40 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
     const isLarge = gripLayout === 'split_edge';
 
     return (
-      <div className="flex flex-col items-center gap-1.5 w-full">
-        <div className="flex items-center justify-between w-full px-1 text-[11px] text-slate-400">
-          <span className="font-medium text-slate-300 truncate">{label}</span>
-          <span className="font-mono tabular-nums text-[10px] text-slate-400 shrink-0">
-            {x.toFixed(2)},{y.toFixed(2)}
-          </span>
+      <div className="flex flex-col items-center gap-1 w-full">
+        {/* Compact Single Header Row: Stick Label + Axis Readout + Center(0,0) + L3/R3 Click */}
+        <div className="flex items-center justify-between gap-1 w-full px-0.5 text-[10px] text-slate-400">
+          <span className="font-semibold text-slate-300 truncate">{label}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="hidden sm:inline font-mono tabular-nums text-[9px] text-slate-400">
+              {x.toFixed(1)},{y.toFixed(1)}
+            </span>
+            <button
+              type="button"
+              onClick={() => onStickChange(stick, 0, 0)}
+              className={`min-h-[20px] px-1.5 text-[9px] font-mono rounded border whitespace-nowrap shrink-0 ${shellClasses.moduleSurface} text-slate-400 hover:text-white`}
+              aria-label={`${label} Center`}
+            >
+              0,0
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onButtonChange(
+                  clickButtonIndex,
+                  (gamepadState.buttons[clickButtonIndex] ?? 0) > 0.5 ? 0 : 1
+                )
+              }
+              className={`min-h-[20px] px-1.5 text-[9px] font-mono rounded border whitespace-nowrap shrink-0 ${
+                stickClicked
+                  ? 'pad-stick-cap-active font-bold'
+                  : `${shellClasses.moduleSurface} text-slate-300 hover:border-slate-600`
+              }`}
+              aria-label={`Click ${stick === 'left' ? 'L3' : 'R3'}`}
+            >
+              {stick === 'left' ? 'L3' : 'R3'}
+            </button>
+          </div>
         </div>
 
         <div
@@ -442,76 +481,24 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           }}
           className={`relative ${
             isLarge
-              ? 'w-24 h-24 sm:w-36 sm:h-36 lg:w-40 lg:h-40'
-              : 'w-20 h-20 sm:w-32 sm:h-32 lg:w-36 lg:h-36'
+              ? 'w-20 h-20 sm:w-32 sm:h-32 lg:w-36 lg:h-36'
+              : 'w-[74px] h-[74px] sm:w-28 sm:h-28 lg:w-32 lg:h-32'
           } rounded-full border-2 transition-colors controller-surface flex items-center justify-center cursor-grab active:cursor-grabbing ${shellClasses.moduleSurface} pad-stick-ring-themed shadow-inner`}
         >
-          <div className="absolute inset-2 rounded-full border border-slate-800/90 pointer-events-none" />
+          <div className="absolute inset-1.5 rounded-full border border-slate-800/90 pointer-events-none" />
           <div className="absolute w-full h-px bg-slate-800/80 pointer-events-none" />
           <div className="absolute h-full w-px bg-slate-800/80 pointer-events-none" />
           <div className="rounded-full border border-dashed pointer-events-none pad-deadzone-ring" />
 
           <div
-            className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full border-2 flex flex-col items-center justify-center pointer-events-none transition-transform duration-75 ${
+            className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 flex flex-col items-center justify-center pointer-events-none transition-transform duration-75 ${
               stick === 'left' ? 'pad-stick-left-pos' : 'pad-stick-right-pos'
             } ${stickClicked ? 'pad-stick-cap-active scale-95' : 'pad-stick-cap-themed'}`}
           >
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold">
+            <span className="text-[9px] sm:text-[11px] font-mono font-bold">
               {stick === 'left' ? (isPS ? 'L3' : 'LS') : isPS ? 'R3' : 'RS'}
             </span>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-1">
-          <button
-            type="button"
-            onClick={() => onStickChange(stick, -0.85, 0)}
-            className={`hidden sm:inline-flex min-h-[28px] px-1.5 items-center text-[10px] font-mono rounded border whitespace-nowrap shrink-0 ${shellClasses.moduleSurface} text-slate-300 hover:border-slate-600`}
-            aria-label={`${label} Tilt Left`}
-          >
-            ←X
-          </button>
-          <button
-            type="button"
-            onClick={() => onStickChange(stick, 0, -0.85)}
-            className={`hidden sm:inline-flex min-h-[28px] px-1.5 items-center text-[10px] font-mono rounded border whitespace-nowrap shrink-0 ${shellClasses.moduleSurface} text-slate-300 hover:border-slate-600`}
-            aria-label={`${label} Tilt Up`}
-          >
-            ↑Y
-          </button>
-          <button
-            type="button"
-            onClick={() => onStickChange(stick, 0, 0)}
-            className={`min-h-[26px] px-2 text-[10px] font-mono rounded border whitespace-nowrap shrink-0 ${shellClasses.moduleSurface} text-slate-400 hover:text-white`}
-            aria-label={`${label} Center`}
-          >
-            0,0
-          </button>
-          <button
-            type="button"
-            onClick={() => onStickChange(stick, 0.85, 0)}
-            className={`hidden sm:inline-flex min-h-[28px] px-1.5 items-center text-[10px] font-mono rounded border whitespace-nowrap shrink-0 ${shellClasses.moduleSurface} text-slate-300 hover:border-slate-600`}
-            aria-label={`${label} Tilt Right`}
-          >
-            X→
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              onButtonChange(
-                clickButtonIndex,
-                (gamepadState.buttons[clickButtonIndex] ?? 0) > 0.5 ? 0 : 1
-              )
-            }
-            className={`min-h-[26px] px-2 text-[10px] font-mono rounded border whitespace-nowrap shrink-0 ${
-              stickClicked
-                ? 'pad-stick-cap-active font-bold'
-                : `${shellClasses.moduleSurface} text-slate-300 hover:border-slate-600`
-            }`}
-            aria-label={`Click ${stick === 'left' ? 'L3' : 'R3'}`}
-          >
-            {stick === 'left' ? 'L3' : 'R3'}
-          </button>
         </div>
       </div>
     );
@@ -524,13 +511,13 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
     const right = (gamepadState.buttons[15] ?? 0) > 0.5;
 
     const btnBase =
-      'min-w-[38px] min-h-[38px] sm:min-w-[46px] sm:min-h-[46px] flex items-center justify-center rounded-xl border font-mono text-xs font-bold transition-transform active:scale-95 controller-surface';
+      'w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-xl border font-mono text-xs font-bold transition-transform active:scale-95 controller-surface';
 
     return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-[11px] text-slate-400">D-Pad (दिशा बटन)</span>
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="text-[10px] text-slate-400">D-Pad</span>
         <div
-          className={`grid grid-cols-3 gap-1 sm:gap-1.5 p-1.5 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
+          className={`grid grid-cols-3 gap-1 p-1 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
         >
           <div />
           <button
@@ -559,8 +546,8 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           >
             ◀
           </button>
-          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center justify-center text-[9px] font-mono text-slate-400">
-            D-PAD
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-slate-900/70 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
+            DPAD
           </div>
           <button
             type="button"
@@ -604,10 +591,12 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
     if (gripLayout === 'arcade_fightpad') {
       return (
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[11px] text-slate-400">6-Btn Fightpad</span>
+        <div className="flex flex-col items-center gap-0.5">
+          <span className="text-[10px] text-slate-400">6-Btn Fightpad</span>
           <div
-            className={`grid grid-cols-3 gap-1.5 sm:gap-2.5 p-2 sm:p-3 rounded-2xl border ${shellClasses.moduleSurface}`}
+            data-testid="face-buttons-cluster"
+            data-button-accent={theme.buttonAccentHex}
+            className={`grid grid-cols-3 gap-1 sm:gap-2 p-1.5 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
           >
             <button
               type="button"
@@ -615,7 +604,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(2, 1)}
               onPointerUp={() => handleButtonRelease(2)}
               onPointerLeave={() => handleButtonRelease(2)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-sm sm:text-base flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b2 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -627,7 +616,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(3, 1)}
               onPointerUp={() => handleButtonRelease(3)}
               onPointerLeave={() => handleButtonRelease(3)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-sm sm:text-base flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b3 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -639,7 +628,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(5, 1)}
               onPointerUp={() => handleButtonRelease(5)}
               onPointerLeave={() => handleButtonRelease(5)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-xs flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
                 b5 ? 'pad-trigger-themed-active' : 'bg-slate-900 pad-trigger-themed'
               }`}
             >
@@ -652,7 +641,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(0, 1)}
               onPointerUp={() => handleButtonRelease(0)}
               onPointerLeave={() => handleButtonRelease(0)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-sm sm:text-base flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b0 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -664,7 +653,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(1, 1)}
               onPointerUp={() => handleButtonRelease(1)}
               onPointerLeave={() => handleButtonRelease(1)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-sm sm:text-base flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-xs sm:text-sm flex items-center justify-center ${
                 b1 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
@@ -676,7 +665,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(7, 1)}
               onPointerUp={() => handleButtonRelease(7)}
               onPointerLeave={() => handleButtonRelease(7)}
-              className={`min-w-[42px] min-h-[42px] sm:min-w-[52px] sm:min-h-[52px] rounded-full border-2 font-display font-bold text-xs flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-12 sm:h-12 rounded-full border-2 font-display font-bold text-[10px] flex items-center justify-center ${
                 b7 ? 'pad-trigger-themed-active' : 'bg-slate-900 pad-trigger-themed'
               }`}
             >
@@ -689,18 +678,18 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
     const sizeClass =
       skin === 'pro_claw' || gripLayout === 'split_edge'
-        ? 'min-w-[42px] min-h-[42px] sm:min-w-[54px] sm:min-h-[54px] text-sm sm:text-base'
-        : 'min-w-[40px] min-h-[40px] sm:min-w-[48px] sm:min-h-[48px] text-xs sm:text-sm';
+        ? 'w-10 h-10 sm:w-12 sm:h-12 text-xs sm:text-sm'
+        : 'w-9 h-9 sm:w-11 sm:h-11 text-xs sm:text-sm';
 
     return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-[11px] text-slate-400">
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="text-[10px] text-slate-400">
           {isPS ? 'Action Buttons' : 'ABXY Buttons'}
         </span>
         <div
           data-testid="face-buttons-cluster"
           data-button-accent={theme.buttonAccentHex}
-          className={`grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
+          className={`grid grid-cols-3 gap-1 sm:gap-1.5 p-1 sm:p-2 rounded-2xl border ${shellClasses.moduleSurface}`}
         >
           <div />
           <button
@@ -730,7 +719,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
             {isPS ? '□' : 'X'}
           </button>
 
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[9px] font-mono text-slate-400">
+          <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-[8px] font-mono text-slate-400">
             {isPS ? 'PS5' : 'XBOX'}
           </div>
 
@@ -768,16 +757,17 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
   const renderCenterBridgeContent = () => (
     <div
-      className={`flex flex-col items-center justify-between gap-2.5 p-2.5 sm:p-3.5 rounded-2xl border ${shellClasses.moduleSurface}`}
+      className={`flex flex-wrap lg:flex-col items-center justify-between gap-1.5 sm:gap-2.5 p-1.5 sm:p-3 rounded-2xl border ${shellClasses.moduleSurface}`}
     >
-      <div className="flex flex-wrap items-center justify-center gap-2 w-full">
+      {/* System Menu Buttons: View / Guide / Menu */}
+      <div className="flex items-center justify-center gap-1.5 w-full lg:w-auto">
         <button
           type="button"
           aria-label={isPS ? 'Button Create' : 'Button View'}
           onPointerDown={() => handleButtonPress(8, 1)}
           onPointerUp={() => handleButtonRelease(8)}
           onPointerLeave={() => handleButtonRelease(8)}
-          className={`min-h-[38px] px-3 rounded-xl border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+          className={`min-h-[30px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[8] ?? 0) > 0.5
               ? 'pad-btn-themed-active font-bold'
               : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-600'
@@ -792,7 +782,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           onPointerDown={() => handleButtonPress(16, 1)}
           onPointerUp={() => handleButtonRelease(16)}
           onPointerLeave={() => handleButtonRelease(16)}
-          className={`min-w-[46px] min-h-[46px] px-3 rounded-full border-2 font-display font-bold text-xs transition-transform active:scale-95 whitespace-nowrap shrink-0 ${
+          className={`min-w-[36px] min-h-[32px] sm:min-w-[44px] sm:min-h-[42px] px-2.5 rounded-full border-2 font-display font-bold text-[11px] transition-transform active:scale-95 whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[16] ?? 0) > 0.5
               ? 'pad-btn-themed-active'
               : 'bg-slate-900 pad-btn-themed'
@@ -807,7 +797,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           onPointerDown={() => handleButtonPress(9, 1)}
           onPointerUp={() => handleButtonRelease(9)}
           onPointerLeave={() => handleButtonRelease(9)}
-          className={`min-h-[38px] px-3 rounded-xl border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+          className={`min-h-[30px] sm:min-h-[36px] px-2.5 rounded-xl border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
             (gamepadState.buttons[9] ?? 0) > 0.5
               ? 'pad-btn-themed-active font-bold'
               : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-600'
@@ -815,121 +805,124 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         >
           {isPS ? 'Options' : 'Menu / Start'}
         </button>
+
+        {/* Compact Gyro Toggle Pill right next to Start on Mobile */}
+        <button
+          type="button"
+          onClick={() =>
+            onCalibrationChange((prev) => ({
+              ...prev,
+              gyroEnabled: !prev.gyroEnabled,
+            }))
+          }
+          className={`min-h-[30px] px-2 rounded-xl text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+            calibration.gyroEnabled
+              ? 'bg-emerald-500 text-slate-950'
+              : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Compass className="w-3 h-3" />
+          <span>{calibration.gyroEnabled ? 'GYRO ON' : 'GYRO'}</span>
+        </button>
       </div>
 
-      {/* Gyro & Macros Compact Strip */}
-      <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
-        <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-medium text-slate-300 flex items-center gap-1">
-              <Compass className="w-3 h-3 text-amber-400" />
-              <span>Gyro Steering</span>
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                onCalibrationChange((prev) => ({
-                  ...prev,
-                  gyroEnabled: !prev.gyroEnabled,
-                }))
+      {/* Gyro Slider (Desktop/Tablet or when Gyro Enabled) & 1-Row Quick Macros */}
+      <div className="w-full flex flex-wrap lg:flex-col items-center justify-between gap-1.5">
+        <div
+          className={`${
+            calibration.gyroEnabled ? 'flex' : 'hidden sm:flex'
+          } w-full items-center gap-2 px-2 py-1 rounded-xl bg-slate-900 border border-slate-800`}
+        >
+          <label
+            htmlFor="gyro-steer-slider"
+            className="text-[10px] font-mono text-slate-400 shrink-0"
+          >
+            Tilt X
+          </label>
+          <input
+            id="gyro-steer-slider"
+            type="range"
+            min={-1}
+            max={1}
+            step={0.05}
+            value={gamepadState.gyroTiltX}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (!calibration.gyroEnabled) {
+                onCalibrationChange((prev) => ({ ...prev, gyroEnabled: true }));
               }
-              className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                calibration.gyroEnabled
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
-            >
-              {calibration.gyroEnabled ? 'GYRO ON' : 'GYRO OFF'}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label
-              htmlFor="gyro-steer-slider"
-              className="text-[10px] font-mono text-slate-400 shrink-0"
-            >
-              Tilt X
-            </label>
-            <input
-              id="gyro-steer-slider"
-              type="range"
-              min={-1}
-              max={1}
-              step={0.05}
-              value={gamepadState.gyroTiltX}
-              onChange={(e) => {
-                const val = parseFloat(e.target.value);
-                if (!calibration.gyroEnabled) {
-                  onCalibrationChange((prev) => ({ ...prev, gyroEnabled: true }));
-                }
-                onGyroChange(val, gamepadState.gyroTiltY);
-              }}
-              className="w-full cursor-pointer pad-slider-themed"
-            />
-            <span className="text-[10px] font-mono tabular-nums text-slate-300 w-8 text-right">
-              {Math.round(gamepadState.gyroTiltX * 45)}°
-            </span>
-          </div>
+              onGyroChange(val, gamepadState.gyroTiltY);
+            }}
+            className="w-full cursor-pointer pad-slider-themed"
+          />
+          <span className="text-[10px] font-mono tabular-nums text-slate-300 w-7 text-right">
+            {Math.round(gamepadState.gyroTiltX * 45)}°
+          </span>
         </div>
 
-        <div className="flex flex-col justify-between gap-1">
-          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span>Combo Macros</span>
-          </span>
-          <div className="grid grid-cols-3 gap-1">
-            <button
-              type="button"
-              onClick={() => onMacroTrigger('hadouken')}
-              className="min-h-[34px] px-1.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate"
-            >
-              Hadouken
-            </button>
-            <button
-              type="button"
-              onClick={() => onMacroTrigger('rapid_rt')}
-              className="min-h-[34px] px-1.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate"
-            >
-              Turbo RT
-            </button>
-            <button
-              type="button"
-              onClick={() => onMacroTrigger('dodge_reload')}
-              className="min-h-[34px] px-1.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate"
-            >
-              Dodge+Reload
-            </button>
-          </div>
+        <div className="w-full grid grid-cols-3 gap-1">
+          <button
+            type="button"
+            onClick={() => onMacroTrigger('hadouken')}
+            className="min-h-[28px] sm:min-h-[32px] px-1.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate flex items-center justify-center gap-1"
+          >
+            <Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+            <span>Hadouken</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onMacroTrigger('rapid_rt')}
+            className="min-h-[28px] sm:min-h-[32px] px-1.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate"
+          >
+            Turbo RT
+          </button>
+          <button
+            type="button"
+            onClick={() => onMacroTrigger('dodge_reload')}
+            className="min-h-[28px] sm:min-h-[32px] px-1.5 py-0.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/60 text-[10px] font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0 truncate"
+          >
+            Dodge+Reload
+          </button>
         </div>
       </div>
     </div>
   );
+
+  const hasOpenModalDrawer = showThemePicker || showOptionsDrawer || showExternalSiteModal;
 
   return (
     <div
       data-testid="virtual-controller-shell"
       data-shell-theme={theme.shellTheme}
       data-grip-layout={gripLayout}
-      className={`rounded-3xl border-2 ${shellClasses.outerShell} ${shellClasses.textPrimary} p-2 sm:p-5 flex flex-col gap-2 sm:gap-3 transition-colors overflow-hidden`}
+      data-single-screen={isPureControllerOnly ? 'true' : 'false'}
+      className={`relative rounded-2xl sm:rounded-3xl border-2 ${shellClasses.outerShell} ${
+        shellClasses.textPrimary
+      } ${
+        isPureControllerOnly
+          ? 'flex-1 h-full min-h-0 p-1.5 sm:p-3 flex flex-col justify-between gap-1 sm:gap-2 overflow-hidden select-none'
+          : 'p-2 sm:p-4 flex flex-col gap-1.5 sm:gap-2.5 overflow-hidden'
+      } transition-colors`}
     >
       <style>{dynamicThemeCss}</style>
 
-      {/* Live Phone <-> Tablet Pairing & Room Sync Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-950/90 border border-slate-800">
-        <div className="flex flex-wrap items-center gap-1.5">
+      {/* Row 1: Ultra-Compact All-in-One Room ID & Mode Command Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-1 px-2 py-1 rounded-xl bg-slate-950/90 border border-slate-800 shrink-0">
+        {/* Left: Unique 10-Digit Room ID + Input + New Secret ID Generator */}
+        <div className="flex flex-wrap items-center gap-1">
           <span
             data-testid="live-pairing-badge"
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold border ${
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-mono font-semibold border ${
               isTabletPaired
                 ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                 : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
             }`}
           >
-            <Wifi className="w-3 h-3" />
+            <Wifi className="w-3 h-3 shrink-0" />
             <span>
               {isTabletPaired
-                ? `TABLET LINKED (${peersCount} · ${rttMs.toFixed(1)}ms)`
-                : `ROOM: ${roomCode} (${wsConnected ? 'Ready' : 'Linking...'})`}
+                ? `LINKED (${peersCount} · ${rttMs.toFixed(0)}ms)`
+                : `ID: ${formattedRoomId}`}
             </span>
           </span>
 
@@ -937,8 +930,9 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                if (quickRoomInput.trim()) {
-                  onRoomCodeChange(quickRoomInput.trim().toUpperCase());
+                const clean = sanitizeRoomId(quickRoomInput);
+                if (clean) {
+                  onRoomCodeChange(clean);
                 }
               }}
               className="inline-flex items-center gap-1"
@@ -949,108 +943,111 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               <input
                 id="quick-pad-room-input"
                 type="text"
-                maxLength={10}
+                maxLength={14}
                 value={quickRoomInput}
                 onChange={(e) => setQuickRoomInput(e.target.value.toUpperCase())}
                 aria-label="Room Code"
-                className="w-16 min-h-[28px] px-1.5 rounded-md bg-slate-900 border border-slate-700 font-mono font-bold text-[11px] text-amber-400 uppercase"
+                className="w-24 sm:w-28 min-h-[26px] px-1.5 rounded-md bg-slate-900 border border-slate-700 font-mono font-bold text-[10px] sm:text-[11px] text-amber-400 uppercase"
               />
               <button
                 type="submit"
-                className="min-h-[28px] px-2 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-white whitespace-nowrap shrink-0"
+                className="min-h-[26px] px-2 rounded-md bg-slate-800 hover:bg-slate-700 text-[10px] font-semibold text-white whitespace-nowrap shrink-0"
               >
                 Join
               </button>
+              {onGenerateNewRoomId && (
+                <button
+                  type="button"
+                  data-testid="generate-new-room-btn"
+                  onClick={onGenerateNewRoomId}
+                  title="Generate New 10-Digit Secret Numeric ID"
+                  className="min-h-[26px] px-1.5 rounded-md bg-slate-900 border border-slate-700 hover:border-amber-400 text-[10px] font-semibold text-amber-300 flex items-center gap-0.5 whitespace-nowrap shrink-0"
+                >
+                  <RefreshCw className="w-2.5 h-2.5" />
+                  <span>नया ID</span>
+                </button>
+              )}
             </form>
           )}
         </div>
 
-        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-400">
-          <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>
-            टैबलेट पर <strong className="text-white">Cloud Arena</strong> खोलें और इसी Room Code से फ़ोन से कंट्रोल करें
-          </span>
-        </div>
-      </div>
-
-      {/* Top Controller Command Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-slate-800">
-        {/* Console Skin Selector */}
-        <div className="flex items-center gap-0.5 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
-          <button
-            type="button"
-            onClick={() => onSkinChange('xbox')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              skin === 'xbox'
-                ? 'bg-emerald-500 text-slate-950'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Xbox Series X|S
-          </button>
-          <button
-            type="button"
-            onClick={() => onSkinChange('playstation')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              skin === 'playstation'
-                ? 'bg-sky-500 text-slate-950'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            PS5 DualSense
-          </button>
-          <button
-            type="button"
-            onClick={() => onSkinChange('pro_claw')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              skin === 'pro_claw'
-                ? 'bg-amber-500 text-slate-950'
-                : 'text-slate-300 hover:text-white'
-            }`}
-          >
-            Pro Claw + Gyro
-          </button>
-        </div>
-
-        {/* Ergonomic Layout Style Selector */}
-        <div className="flex items-center gap-0.5 p-0.5 bg-slate-950 rounded-lg border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setGripLayout('console_shell')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              gripLayout === 'console_shell'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Console Grip
-          </button>
-          <button
-            type="button"
-            onClick={() => setGripLayout('split_edge')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              gripLayout === 'split_edge'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Split Thumb-Edge
-          </button>
-          <button
-            type="button"
-            onClick={() => setGripLayout('arcade_fightpad')}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-              gripLayout === 'arcade_fightpad'
-                ? 'bg-slate-800 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            6-Btn Fightpad
-          </button>
-        </div>
-
-        {/* Controller Utility Triggers */}
+        {/* Right: Skin + Grip + Single-Screen Toggle + Utility Triggers */}
         <div className="flex flex-wrap items-center gap-1">
+          {/* Console Skin Selector */}
+          <div className="flex items-center gap-0.5 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+            <button
+              type="button"
+              onClick={() => onSkinChange('xbox')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
+                skin === 'xbox'
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Xbox Series X|S
+            </button>
+            <button
+              type="button"
+              onClick={() => onSkinChange('playstation')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
+                skin === 'playstation'
+                  ? 'bg-sky-500 text-slate-950'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              PS5 DualSense
+            </button>
+            <button
+              type="button"
+              onClick={() => onSkinChange('pro_claw')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-semibold rounded transition-colors whitespace-nowrap shrink-0 ${
+                skin === 'pro_claw'
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              Pro Claw + Gyro
+            </button>
+          </div>
+
+          {/* Ergonomic Grip Selector (Desktop / Tablet inline) */}
+          <div className="hidden md:flex items-center gap-0.5 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setGripLayout('console_shell')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                gripLayout === 'console_shell'
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Console Grip
+            </button>
+            <button
+              type="button"
+              onClick={() => setGripLayout('split_edge')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                gripLayout === 'split_edge'
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Split Thumb-Edge
+            </button>
+            <button
+              type="button"
+              onClick={() => setGripLayout('arcade_fightpad')}
+              className={`min-h-[24px] px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                gripLayout === 'arcade_fightpad'
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              6-Btn Fightpad
+            </button>
+          </div>
+
+          {/* Utility Drawer Triggers */}
           <button
             type="button"
             data-testid="open-layout-editor-btn"
@@ -1059,10 +1056,10 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               setShowLayoutEditor(nextOpen);
               setIsDragModeActive(nextOpen);
             }}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
               showLayoutEditor || isDragModeActive
                 ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
             }`}
           >
             <Move className="w-3 h-3" />
@@ -1071,11 +1068,15 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowThemePicker((v) => !v)}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+            onClick={() => {
+              setShowThemePicker((v) => !v);
+              setShowOptionsDrawer(false);
+              setShowExternalSiteModal(false);
+            }}
+            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
               showThemePicker
                 ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
             }`}
           >
             <Palette className="w-3 h-3" />
@@ -1084,11 +1085,15 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowOptionsDrawer((v) => !v)}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+            onClick={() => {
+              setShowOptionsDrawer((v) => !v);
+              setShowThemePicker(false);
+              setShowExternalSiteModal(false);
+            }}
+            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
               showOptionsDrawer
                 ? 'bg-amber-500 text-slate-950 border-amber-400'
-                : 'bg-slate-950 border-slate-700 text-slate-200 hover:border-slate-500'
+                : 'bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500'
             }`}
           >
             <Settings2 className="w-3 h-3" />
@@ -1097,32 +1102,42 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
           <button
             type="button"
-            onClick={() => setShowExternalSiteModal((v) => !v)}
-            className={`min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+            data-testid="open-external-bridge-btn"
+            onClick={() => {
+              setShowExternalSiteModal((v) => !v);
+              setShowThemePicker(false);
+              setShowOptionsDrawer(false);
+            }}
+            className={`min-h-[26px] px-1.5 py-0.5 text-[10px] font-semibold rounded-md border flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
               showExternalSiteModal
                 ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                : 'bg-slate-950 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
+                : 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:border-emerald-400'
             }`}
           >
             <Globe className="w-3 h-3" />
-            <span>अन्य गेमिंग साइट</span>
+            <span>अन्य गेमिंग साइट (Xbox)</span>
           </button>
 
           {onTogglePureControllerOnly && (
             <button
               type="button"
+              data-testid="single-screen-mode-btn"
               onClick={onTogglePureControllerOnly}
-              className="min-h-[30px] px-2 py-1 text-[11px] font-semibold rounded-md bg-slate-950 border border-slate-700 hover:border-slate-500 text-slate-200 flex items-center gap-1 whitespace-nowrap shrink-0"
+              className={`min-h-[26px] px-2 py-0.5 text-[10px] font-bold rounded-md border flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
+                isPureControllerOnly
+                  ? 'bg-amber-500 text-slate-950 border-amber-400'
+                  : 'bg-slate-900 border-amber-500/50 text-amber-300 hover:border-amber-400'
+              }`}
             >
               {isPureControllerOnly ? (
                 <>
-                  <Minimize2 className="w-3 h-3 text-amber-400" />
-                  <span>सभी टैब दिखाएं</span>
+                  <Minimize2 className="w-3 h-3" />
+                  <span>एक-स्क्रीन ON (सभी टैब दिखाएं)</span>
                 </>
               ) : (
                 <>
-                  <Maximize2 className="w-3 h-3 text-amber-400" />
-                  <span>केवल कंट्रोलर (Full Pad)</span>
+                  <Maximize2 className="w-3 h-3" />
+                  <span>एक-स्क्रीन मोड (No Scroll)</span>
                 </>
               )}
             </button>
@@ -1132,56 +1147,93 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
 
       {/* Modular Drawer 0: Drag-and-Drop Button & Stick Layout Studio */}
       {showLayoutEditor && (
-        <ControllerLayoutEditorDrawer
-          isDragModeActive={isDragModeActive}
-          onToggleDragMode={() => setIsDragModeActive((v) => !v)}
-          selectedModule={selectedModule}
-          onSelectModule={setSelectedModule}
-          modules={modulePositions}
-          onUpdateModuleOffset={updateModuleOffset}
-          onApplyPreset={applyLayoutPreset}
-        />
+        <div
+          className={
+            isPureControllerOnly
+              ? 'max-h-[34dvh] overflow-y-auto rounded-xl border border-amber-500/50 shrink-0'
+              : ''
+          }
+        >
+          <ControllerLayoutEditorDrawer
+            isDragModeActive={isDragModeActive}
+            onToggleDragMode={() => setIsDragModeActive((v) => !v)}
+            selectedModule={selectedModule}
+            onSelectModule={setSelectedModule}
+            modules={modulePositions}
+            onUpdateModuleOffset={updateModuleOffset}
+            onApplyPreset={applyLayoutPreset}
+          />
+        </div>
       )}
 
-      {/* Modular Drawer 1: Real-Time Color-Picker & Shell Theme Studio */}
-      {showThemePicker && (
-        <ControllerThemePickerDrawer
-          theme={theme}
-          onSelectTheme={setTheme}
-          onUpdateField={updateThemeField}
-        />
+      {/* Floating Overlay Modal Wrapper when in Single-Screen Mode so drawers never push controller buttons off-screen! */}
+      {hasOpenModalDrawer && (
+        <div
+          className={
+            isPureControllerOnly
+              ? 'fixed inset-x-2 top-12 z-50 max-h-[84dvh] overflow-y-auto rounded-2xl shadow-2xl border border-slate-700 bg-slate-950/95 p-2 flex flex-col gap-2'
+              : 'flex flex-col gap-2'
+          }
+        >
+          {isPureControllerOnly && (
+            <div className="flex items-center justify-between px-2 py-1 border-b border-slate-800">
+              <span className="text-xs font-semibold text-amber-400">
+                कंट्रोलर सेटिंग्स (1-Screen Overlay)
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowThemePicker(false);
+                  setShowOptionsDrawer(false);
+                  setShowExternalSiteModal(false);
+                }}
+                className="min-h-[26px] px-2 rounded-lg bg-slate-800 text-white text-xs font-semibold flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>बंद करें (Close)</span>
+              </button>
+            </div>
+          )}
+
+          {showThemePicker && (
+            <ControllerThemePickerDrawer
+              theme={theme}
+              onSelectTheme={setTheme}
+              onUpdateField={updateThemeField}
+            />
+          )}
+
+          {showOptionsDrawer && (
+            <ControllerOptionsDrawer
+              roomCode={roomCode}
+              onRoomCodeChange={onRoomCodeChange}
+              onGenerateNewRoomId={onGenerateNewRoomId}
+              peersCount={peersCount}
+              wsConnected={wsConnected}
+              webrtcConnected={webrtcConnected}
+              qrDataUrl={qrDataUrl}
+              calibration={calibration}
+              onCalibrationChange={onCalibrationChange}
+              holdLockMode={holdLockMode}
+              onToggleHoldLock={() => setHoldLockMode((v) => !v)}
+              wakeLockActive={wakeLockActive}
+              onHapticTest={onHapticTest}
+              onResetAll={onResetAll}
+            />
+          )}
+
+          {showExternalSiteModal && (
+            <ExternalGamingBridgeDrawer roomCode={roomCode} appOrigin={appOrigin} />
+          )}
+        </div>
       )}
 
-      {/* Modular Drawer 2: Controller Options & Room Pairing */}
-      {showOptionsDrawer && (
-        <ControllerOptionsDrawer
-          roomCode={roomCode}
-          onRoomCodeChange={onRoomCodeChange}
-          peersCount={peersCount}
-          wsConnected={wsConnected}
-          webrtcConnected={webrtcConnected}
-          qrDataUrl={qrDataUrl}
-          calibration={calibration}
-          onCalibrationChange={onCalibrationChange}
-          holdLockMode={holdLockMode}
-          onToggleHoldLock={() => setHoldLockMode((v) => !v)}
-          wakeLockActive={wakeLockActive}
-          onHapticTest={onHapticTest}
-          onResetAll={onResetAll}
-        />
-      )}
-
-      {/* Modular Drawer 3: External Gaming Website Bridge */}
-      {showExternalSiteModal && (
-        <ExternalGamingBridgeDrawer roomCode={roomCode} appOrigin={appOrigin} />
-      )}
-
-      {/* Shoulder Bumpers (LB/RB or L1/R1) & Analog Triggers (LT/RT or L2/R2) — Always 2 Columns Side-by-Side! */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+      {/* Row 2: Shoulder Bumpers (LB/RB or L1/R1) & Triggers (LT/RT or L2/R2) — Single Compact Horizontal Strip! */}
+      <div className="grid grid-cols-2 gap-1.5 sm:gap-3 shrink-0">
         {renderDraggableModule(
           'leftShoulder',
           <div
-            className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
+            className={`flex items-center justify-between gap-1 sm:gap-2 p-1 sm:p-2 rounded-xl sm:rounded-2xl border ${shellClasses.moduleSurface}`}
           >
             <button
               type="button"
@@ -1189,7 +1241,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(4, 1)}
               onPointerUp={() => handleButtonRelease(4)}
               onPointerLeave={() => handleButtonRelease(4)}
-              className={`min-h-[40px] sm:min-h-[46px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[4] ?? 0) > 0.5
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1198,7 +1250,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               {isPS ? 'L1' : 'LB'}
             </button>
 
-            <div className="flex-1 min-w-[70px] flex flex-col gap-0.5 px-1">
+            <div className="hidden sm:flex flex-1 min-w-[65px] flex-col gap-0.5 px-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
                 <label htmlFor="lt-analog-slider">{isPS ? 'L2' : 'LT'}</label>
                 <span className="tabular-nums">
@@ -1223,7 +1275,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(6, 1)}
               onPointerUp={() => handleButtonRelease(6)}
               onPointerLeave={() => handleButtonRelease(6)}
-              className={`min-h-[40px] sm:min-h-[46px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[6] ?? 0) > 0.2
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1237,7 +1289,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         {renderDraggableModule(
           'rightShoulder',
           <div
-            className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 p-2 sm:p-2.5 rounded-2xl border ${shellClasses.moduleSurface}`}
+            className={`flex items-center justify-between gap-1 sm:gap-2 p-1 sm:p-2 rounded-xl sm:rounded-2xl border ${shellClasses.moduleSurface}`}
           >
             <button
               type="button"
@@ -1245,7 +1297,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(7, 1)}
               onPointerUp={() => handleButtonRelease(7)}
               onPointerLeave={() => handleButtonRelease(7)}
-              className={`min-h-[40px] sm:min-h-[46px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-3.5 rounded-xl font-mono font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[7] ?? 0) > 0.2
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1254,7 +1306,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               {isPS ? 'R2 100%' : 'RT 100%'}
             </button>
 
-            <div className="flex-1 min-w-[70px] flex flex-col gap-0.5 px-1">
+            <div className="hidden sm:flex flex-1 min-w-[65px] flex-col gap-0.5 px-1">
               <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
                 <label htmlFor="rt-analog-slider">{isPS ? 'R2' : 'RT'}</label>
                 <span className="tabular-nums">
@@ -1279,7 +1331,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               onPointerDown={() => handleButtonPress(5, 1)}
               onPointerUp={() => handleButtonRelease(5)}
               onPointerLeave={() => handleButtonRelease(5)}
-              className={`min-h-[40px] sm:min-h-[46px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
+              className={`flex-1 sm:flex-none min-h-[34px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl font-display font-bold text-xs border transition-colors whitespace-nowrap shrink-0 ${
                 (gamepadState.buttons[5] ?? 0) > 0.5
                   ? 'pad-trigger-themed-active'
                   : 'bg-slate-900 pad-trigger-themed'
@@ -1291,13 +1343,11 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
         )}
       </div>
 
-      {/* Main Ergonomic Gamepad Deck:
-          On Mobile/Tablet (<1024px): Left Wing & Right Wing sit SIDE-BY-SIDE (grid-cols-2) so both thumbs work simultaneously without scrolling!
-          On Large Desktop (lg:grid-cols-12): Left Wing (4) | Center Bridge (4) | Right Wing (4). */}
-      <div className="grid grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-4 items-center py-1">
+      {/* Row 3: Main Ergonomic Gamepad Deck — Fits 100% in Single Screen with Zero Vertical Scrolling! */}
+      <div className="flex-1 min-h-0 grid grid-cols-2 lg:grid-cols-12 gap-1.5 sm:gap-3 items-stretch">
         {/* Left Thumb Wing (Always Left Column on Mobile & Desktop) */}
         <div
-          className={`col-span-1 lg:col-span-4 flex flex-col items-center justify-center gap-3 p-2 sm:p-3 rounded-3xl border ${shellClasses.wingSurface}`}
+          className={`col-span-1 lg:col-span-4 flex flex-col items-center justify-evenly gap-1.5 sm:gap-2.5 p-1.5 sm:p-3 rounded-2xl sm:rounded-3xl border ${shellClasses.wingSurface}`}
         >
           {isPS || gripLayout === 'arcade_fightpad' ? (
             <>
@@ -1318,14 +1368,14 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           )}
         </div>
 
-        {/* Center Bridge (Middle on Desktop lg:order-none, Full-Width Bottom Bar on Mobile order-last lg:order-none) */}
-        <div className="col-span-2 lg:col-span-4 order-last lg:order-none">
+        {/* Center Bridge (Middle on Desktop lg:order-none, Compact Bottom Strip on Mobile order-last lg:order-none) */}
+        <div className="col-span-2 lg:col-span-4 order-last lg:order-none flex flex-col justify-center shrink-0">
           {renderDraggableModule('centerBridge', renderCenterBridgeContent())}
         </div>
 
         {/* Right Thumb Wing (Always Right Column on Mobile & Desktop) */}
         <div
-          className={`col-span-1 lg:col-span-4 flex flex-col items-center justify-center gap-3 p-2 sm:p-3 rounded-3xl border ${shellClasses.wingSurface}`}
+          className={`col-span-1 lg:col-span-4 flex flex-col items-center justify-evenly gap-1.5 sm:gap-2.5 p-1.5 sm:p-3 rounded-2xl sm:rounded-3xl border ${shellClasses.wingSurface}`}
         >
           {renderDraggableModule('faceButtons', renderFaceButtons())}
           {renderDraggableModule(
@@ -1334,6 +1384,39 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
           )}
         </div>
       </div>
+
+      {/* Row 4 (Only when in Single-Screen Mode): Ultra-Slim Quick Navigation Strip so user can switch to Game Arena or QR without scrolling */}
+      {isPureControllerOnly && onNavigateTab && (
+        <div className="flex items-center justify-between gap-1 px-2 py-1 rounded-xl bg-slate-950/90 border border-slate-800/80 text-[10px] shrink-0">
+          <span className="text-slate-400 flex items-center gap-1 truncate">
+            <Smartphone className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>एक-स्क्रीन मोड सक्रिय (Zero-Swipe Lock)</span>
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('arena')}
+              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
+            >
+              Cloud Arena (गेम)
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('studio')}
+              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
+            >
+              Tablet QR
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('lab')}
+              className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium whitespace-nowrap"
+            >
+              Protocol Lab
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

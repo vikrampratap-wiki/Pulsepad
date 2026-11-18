@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   ControllerSkin,
+  PULSEPAD_PRIVATE_ROOM_KEY,
   StickCalibrationConfig,
   VirtualGamepadState,
   applyStickResponseCurve,
@@ -8,6 +9,7 @@ import {
   decodeGamepadPacket,
   encodeGamepadPacket,
   formatPacketHex,
+  sanitizeRoomId,
 } from '../protocol/gamepadProtocol';
 import {
   installLocalW3CGamepadBridge,
@@ -40,13 +42,40 @@ function hexToBytes(hex: string): Uint8Array | null {
   return out;
 }
 
+function forwardPacketToOpenerWindow(bytes: Uint8Array): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ __pulsepad_hex: bytesToHex(bytes) }, '*');
+    }
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ __pulsepad_hex: bytesToHex(bytes) }, '*');
+    }
+  } catch {
+    // Ignore cross-origin frame restrictions if any
+  }
+}
+
 export function usePulsePadTransport(
   initialRoomCode: string,
   role: 'host' | 'controller' | 'hybrid'
 ) {
-  const [roomCode, setRoomCode] = useState<string>(
-    () => initialRoomCode.trim().toUpperCase() || 'PULSE1'
+  const [roomCode, setRoomCodeState] = useState<string>(
+    () => sanitizeRoomId(initialRoomCode) || '8492310756'
   );
+
+  const setRoomCode = useCallback((nextRoom: string) => {
+    const clean = sanitizeRoomId(nextRoom);
+    if (!clean) return;
+    setRoomCodeState(clean);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(PULSEPAD_PRIVATE_ROOM_KEY, clean);
+      } catch {
+        // Ignore storage quota errors
+      }
+    }
+  }, []);
   const [gamepadState, setGamepadState] = useState<VirtualGamepadState>(() =>
     createInitialGamepadState('xbox')
   );
@@ -171,6 +200,7 @@ export function usePulsePadTransport(
     setGamepadState(decoded);
     setLastHexPacket(formatPacketHex(bytes));
     updateLocalW3CGamepadBridge(decoded);
+    forwardPacketToOpenerWindow(bytes);
   }, []);
 
   // Wait up to 450ms for ICE gathering so SDP offer/answer is self-contained (1-message Vanilla ICE)
@@ -605,6 +635,7 @@ export function usePulsePadTransport(
       const packet = encodeGamepadPacket(next);
       setLastHexPacket(formatPacketHex(packet));
       packetCounterRef.current += 1;
+      forwardPacketToOpenerWindow(packet);
 
       if (bcRef.current) {
         try {

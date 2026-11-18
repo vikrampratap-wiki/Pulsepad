@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { StickCalibrationConfig, StickCurveType } from '../../protocol/gamepadProtocol';
-import { QrCode, ShieldCheck, Vibrate, RotateCcw } from 'lucide-react';
+import {
+  StickCalibrationConfig,
+  StickCurveType,
+  formatRoomIdDisplay,
+  sanitizeRoomId,
+} from '../../protocol/gamepadProtocol';
+import { QrCode, ShieldCheck, Vibrate, RotateCcw, RefreshCw, Lock } from 'lucide-react';
 
 interface ControllerOptionsDrawerProps {
   roomCode: string;
   onRoomCodeChange?: (nextRoom: string) => void;
+  onGenerateNewRoomId?: () => void;
   peersCount: number;
   wsConnected: boolean;
   webrtcConnected: boolean;
@@ -21,6 +27,7 @@ interface ControllerOptionsDrawerProps {
 export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = ({
   roomCode,
   onRoomCodeChange,
+  onGenerateNewRoomId,
   peersCount,
   wsConnected,
   webrtcConnected,
@@ -40,14 +47,18 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
   }, [roomCode]);
 
   return (
-    <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Col 1: Room Pairing & QR */}
+    <div className="p-3 sm:p-4 rounded-2xl bg-slate-950 border border-slate-800 grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+      {/* Col 1: Private 10-Digit Numeric Room Pairing & QR */}
       <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-semibold text-white">
-            Room Code Pairing ({peersCount} Connected)
+        <div className="flex flex-col gap-1.5 flex-1">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>गुप्त 10-अंक रूम ID ({peersCount} जुड़ा)</span>
           </div>
-          <div className="text-[11px] text-slate-400">
+          <div className="text-[11px] font-mono text-amber-300 font-bold">
+            ID: {formatRoomIdDisplay(roomCode)}
+          </div>
+          <div className="text-[10px] text-slate-400">
             {webrtcConnected
               ? 'WebRTC Direct UDP Active'
               : wsConnected
@@ -57,11 +68,12 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (roomDraft.trim() && onRoomCodeChange) {
-                onRoomCodeChange(roomDraft.trim().toUpperCase());
+              const clean = sanitizeRoomId(roomDraft);
+              if (clean && onRoomCodeChange) {
+                onRoomCodeChange(clean);
               }
             }}
-            className="flex items-center gap-1.5"
+            className="flex flex-wrap items-center gap-1.5 pt-0.5"
           >
             <label htmlFor="pad-room-input" className="sr-only">
               Room Code
@@ -69,17 +81,29 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
             <input
               id="pad-room-input"
               type="text"
-              maxLength={10}
+              maxLength={14}
               value={roomDraft}
               onChange={(e) => setRoomDraft(e.target.value.toUpperCase())}
-              className="w-24 min-h-[36px] px-2.5 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-xs text-amber-400 uppercase"
+              placeholder="10-Digit ID"
+              className="w-28 min-h-[34px] px-2 rounded-lg bg-slate-950 border border-slate-700 font-mono font-bold text-xs text-amber-400 uppercase"
             />
             <button
               type="submit"
-              className="min-h-[36px] px-3 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs whitespace-nowrap shrink-0"
+              className="min-h-[34px] px-2.5 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs whitespace-nowrap shrink-0"
             >
-              Join Room
+              Join ID
             </button>
+            {onGenerateNewRoomId && (
+              <button
+                type="button"
+                onClick={onGenerateNewRoomId}
+                className="min-h-[34px] px-2.5 rounded-lg bg-slate-950 border border-slate-700 hover:border-amber-400 text-slate-200 font-medium text-xs flex items-center gap-1 whitespace-nowrap shrink-0"
+                title="Generate New 10-Digit Secret Numeric Room ID"
+              >
+                <RefreshCw className="w-3 h-3 text-amber-400" />
+                <span>नया ID</span>
+              </button>
+            )}
           </form>
         </div>
         {qrDataUrl ? (
@@ -90,7 +114,7 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
             className="w-20 h-20 rounded-lg shrink-0"
           />
         ) : (
-          <div className="w-20 h-20 rounded-lg bg-slate-950 flex items-center justify-center">
+          <div className="w-20 h-20 rounded-lg bg-slate-950 flex items-center justify-center shrink-0">
             <QrCode className="w-6 h-6 text-amber-400" />
           </div>
         )}
@@ -147,7 +171,7 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
           <button
             type="button"
             onClick={onToggleHoldLock}
-            className={`min-h-[38px] px-2 rounded-lg border text-xs font-medium whitespace-nowrap shrink-0 ${
+            className={`min-h-[36px] px-2 rounded-lg border text-xs font-medium whitespace-nowrap shrink-0 ${
               holdLockMode
                 ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold'
                 : 'bg-slate-950 border-slate-800 text-slate-300'
@@ -158,7 +182,7 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
           <button
             type="button"
             onClick={onHapticTest}
-            className="min-h-[38px] px-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
+            className="min-h-[36px] px-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
           >
             <Vibrate className="w-3.5 h-3.5 text-amber-400" />
             <span>Rumble</span>
@@ -166,7 +190,7 @@ export const ControllerOptionsDrawer: React.FC<ControllerOptionsDrawerProps> = (
           <button
             type="button"
             onClick={onResetAll}
-            className="min-h-[38px] px-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
+            className="min-h-[36px] px-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset</span>

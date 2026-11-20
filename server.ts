@@ -162,6 +162,41 @@ async function startServer() {
   // WebSocket Server on /ws for sub-15ms binary relay + WebRTC P2P signaling
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
+  // WebSocket Server on port 8088 (explicitly whitelisted by play.xbox.com CSP connect-src)
+  let ws8088: WebSocketServer | null = null;
+  try {
+    ws8088 = new WebSocketServer({ port: 8088 });
+    ws8088.on('connection', (ws) => {
+      ws.on('message', (data, isBinary) => {
+        const bytes =
+          data instanceof Buffer
+            ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+            : new Uint8Array(data as ArrayBuffer);
+        if (bytes.length !== 12 || bytes[0] !== 0x50) return;
+        if (ws8088) {
+          const hex = Buffer.from(bytes).toString('hex');
+          for (const client of ws8088.clients) {
+            if (client !== ws && client.readyState === WebSocket.OPEN) {
+              client.send(hex);
+            }
+          }
+        }
+        for (const room of rooms.values()) {
+          for (const peer of room.values()) {
+            if (peer.ws.readyState === WebSocket.OPEN) {
+              peer.ws.send(bytes, { binary: true });
+            }
+          }
+        }
+      });
+    });
+    ws8088.on('error', () => {
+      ws8088 = null;
+    });
+  } catch {
+    ws8088 = null;
+  }
+
   wss.on('connection', (ws) => {
     let currentMeta: ClientMeta | null = null;
 
@@ -182,6 +217,15 @@ async function startServer() {
         for (const peer of room.values()) {
           if (peer.clientId !== currentMeta.clientId && peer.ws.readyState === WebSocket.OPEN) {
             peer.ws.send(bytes, { binary: true });
+          }
+        }
+
+        if (ws8088) {
+          const hex = Buffer.from(bytes).toString('hex');
+          for (const client of ws8088.clients) {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(hex);
+            }
           }
         }
         return;

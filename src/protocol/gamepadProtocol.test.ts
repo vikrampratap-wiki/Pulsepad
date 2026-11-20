@@ -8,6 +8,7 @@ import {
   simulateTransportLatency,
   formatPacketHex,
   resolveAppBaseUrl,
+  resolveRelayBackendOrigin,
   buildControllerPairUrl,
   generateSecureNumericRoomId,
   formatRoomIdDisplay,
@@ -273,3 +274,269 @@ test('getControllerOrientationMode accurately detects mobile landscape vs portra
   assert.equal(getControllerOrientationMode(1024, 768), 'portrait');
   assert.equal(getControllerOrientationMode(1920, 1080), 'portrait');
 });
+
+test('Xbox Cloud Gaming Button B (Continue) and all face/d-pad inputs decode properly in hex frame', () => {
+  const state = createInitialGamepadState('xbox');
+  state.buttons[0] = 1; // A
+  state.buttons[1] = 1; // B (Continue)
+  state.buttons[2] = 1; // X
+  state.buttons[3] = 1; // Y
+  state.buttons[12] = 1; // D-pad Up
+  state.buttons[13] = 1; // D-pad Down
+  state.buttons[14] = 1; // D-pad Left
+  state.buttons[15] = 1; // D-pad Right
+  state.sequence = 1001;
+
+  const bytes = encodeGamepadPacket(state);
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  const parsed = parseBridgeHexFrame(hex);
+  assert.ok(parsed);
+  assert.equal(parsed.buttons[0], 1, 'A pressed');
+  assert.equal(parsed.buttons[1], 1, 'B (Continue) pressed');
+  assert.equal(parsed.buttons[2], 1, 'X pressed');
+  assert.equal(parsed.buttons[3], 1, 'Y pressed');
+  assert.equal(parsed.buttons[12], 1, 'D-pad Up');
+  assert.equal(parsed.buttons[13], 1, 'D-pad Down');
+  assert.equal(parsed.buttons[14], 1, 'D-pad Left');
+  assert.equal(parsed.buttons[15], 1, 'D-pad Right');
+  assert.equal(parsed.sequence, 1001);
+});
+
+test('resolveRelayBackendOrigin resolves clean hosted origin and avoids dead 404 Cloud Run backend', () => {
+  const ghOrigin = resolveRelayBackendOrigin('https://vikrampratap-wiki.github.io/Pulsepad');
+  assert.equal(ghOrigin, 'https://vikrampratap-wiki.github.io/Pulsepad');
+  assert.ok(!ghOrigin.includes('run.app'), 'Must not point to dead Cloud Run 404 URL');
+
+  const localOrigin = resolveRelayBackendOrigin('http://localhost:3000');
+  assert.equal(localOrigin, 'http://localhost:3000');
+});
+
+test('Xbox Cloud Gaming bridge snippets include local channels and zero pictorial emojis', () => {
+  const snippets = generateCloudGamingBridgeSnippets('9876543210', 'https://example.com/Pulsepad');
+
+  // Verify CSP-resistant local channels are present in core bookmarklet
+  assert.ok(snippets.bookmarkletHref.includes('127.0.0.1:8088'), 'Includes CSP-whitelisted local 8088 WebSocket');
+  assert.ok(snippets.bookmarkletHref.includes('BroadcastChannel'), 'Includes local BroadcastChannel');
+  assert.ok(snippets.bookmarkletHref.includes('Xbox%20LIVE%20#') || snippets.bookmarkletHref.includes('Xbox LIVE #'), 'Includes live packet counter HUD');
+  assert.ok(!snippets.bookmarkletHref.includes('wss://ntfy.sh'), 'Must not rely on external WebSocket blocked by play.xbox.com CSP');
+
+  // Strict 0 Pictorial Emojis assertion
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+  assert.ok(!emojiRegex.test(snippets.bookmarkletHref), 'Bookmarklet must have 0 pictorial emojis');
+  assert.ok(!emojiRegex.test(snippets.consoleSnippet), 'Console snippet must have 0 pictorial emojis');
+  assert.ok(!emojiRegex.test(snippets.userscriptContent), 'Userscript must have 0 pictorial emojis');
+
+  // Verify MessageChannel transfer is wired into bookmarklet
+  assert.ok(snippets.bookmarkletHref.includes('MessageChannel'), 'Must include MessageChannel for sub-15ms direct port transfer');
+  assert.ok(snippets.bookmarkletHref.length < 1995, `Bookmarklet must be < 1995 chars, got ${snippets.bookmarkletHref.length}`);
+});
+
+test('server.ts port 8088 hex framing formats and decodes cleanly in bridge parser', () => {
+  const binaryPacket = new Uint8Array([
+    0x50, // Header 'P'
+    0x01, // Xbox / Guide pressed
+    0x03, // A + B pressed
+    0x00,
+    0x7f, // Axis 0 max (1.0)
+    0x81, // Axis 1 min (-1.0)
+    0x00,
+    0x00,
+    0xff, // LT max analog
+    0x80, // RT half analog
+    0xe8, // Seq low
+    0x03, // Seq high (1000)
+  ]);
+
+  // server.ts converts bytes to hex string for port 8088 WebSocket clients:
+  const hexFrame = Buffer.from(binaryPacket).toString('hex');
+  assert.equal(hexFrame.length, 24);
+  assert.equal(hexFrame.slice(0, 2), '50');
+
+  // Bridge parses 24-character hex frame
+  const parsed = parseBridgeHexFrame(hexFrame);
+  assert.ok(parsed, 'Hex frame must parse successfully');
+  assert.equal(parsed.buttons[0], 1, 'Button A pressed');
+  assert.equal(parsed.buttons[1], 1, 'Button B pressed');
+  assert.equal(parsed.buttons[16], 1, 'Xbox Guide pressed');
+  assert.equal(parsed.buttons[6], 1, 'LT max');
+  assert.equal(parsed.sequence, 1000);
+});
+
+test('parseBridgeHexFrame handles invalid, empty, or truncated frames without crashing', () => {
+  assert.equal(parseBridgeHexFrame(''), null);
+  assert.equal(parseBridgeHexFrame('50'), null);
+  assert.equal(parseBridgeHexFrame('5000000000000000000000'), null); // 22 chars
+  assert.equal(parseBridgeHexFrame('400000000000000000000000'), null); // Wrong header byte
+  assert.equal(parseBridgeHexFrame('50zzzzzzzzzzzzzzzzzzzzzz'), null); // Non-hex chars
+});
+
+test('entire src/ codebase complies with strict 0 pictorial emojis and dingbats rule', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/u;
+
+  const violations: Array<{ file: string; line: number; text: string }> = [];
+
+  function scanDirectory(dir: string) {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry);
+      const stat = fs.statSync(fullPath);
+      if (stat.isDirectory()) {
+        if (entry !== 'node_modules' && entry !== '.git' && entry !== 'dist') {
+          scanDirectory(fullPath);
+        }
+      } else if (/\.(tsx?|jsx?|html)$/.test(entry)) {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        content.split('\n').forEach((line, idx) => {
+          if (emojiRegex.test(line)) {
+            violations.push({ file: fullPath, line: idx + 1, text: line.trim() });
+          }
+        });
+      }
+    }
+  }
+
+  scanDirectory(path.resolve('./src'));
+  assert.equal(
+    violations.length,
+    0,
+    `Found ${violations.length} emoji/dingbat violations:\n` +
+      violations.map((v) => `  ${v.file}:${v.line} -> ${v.text}`).join('\n')
+  );
+});
+
+test('bookmarklet interval short-circuits K and fc when connected (c > 0) to prevent port leaks and event storms', () => {
+  const snippets = generateCloudGamingBridgeSnippets('7778889990', 'https://play.xbox.com');
+  // Confirm the interval contains the c || short-circuit with safe W.opener reference
+  assert.ok(
+    snippets.bookmarkletHref.includes('c||(fc(),[W.opener,w].map(K))') ||
+      snippets.bookmarkletHref.includes('c||(fc(),[opener,w].map(K))') ||
+      snippets.bookmarkletHref.includes('c||(fc(),[W.opener,w].map(K))'.replace(/ /g, '%20')),
+    'Interval must short-circuit and not recreate MessageChannels or dispatch 60Hz events once packets arrive'
+  );
+  // Confirm first packet fires fc() once
+  assert.ok(
+    snippets.bookmarkletHref.includes('c===1&&fc()'),
+    'Bridge must only fire initial gamepadconnected event once on first packet, not on every 60Hz frame'
+  );
+});
+
+test('bookmarklet executes safely in strict sandbox and injects 12-byte hex packets directly into navigator.getGamepads()', () => {
+  const snippets = generateCloudGamingBridgeSnippets('8492310756', 'https://vikrampratap-wiki.github.io/Pulsepad');
+
+  // Verify length constraints on GitHub Pages domain
+  assert.ok(
+    snippets.bookmarkletHref.length < 1995,
+    `Bookmarklet on GitHub Pages must be < 1995 chars, got ${snippets.bookmarkletHref.length}`
+  );
+
+  const listeners: Record<string, Array<(e: any) => void>> = {};
+  let hudElement: any = null;
+  let dispatchedEvents: any[] = [];
+
+  const mockWindow: any = {
+    opener: null,
+    addEventListener: (type: string, fn: any) => {
+      listeners[type] = listeners[type] || [];
+      listeners[type].push(fn);
+    },
+    removeEventListener: () => {},
+    dispatchEvent: (ev: any) => {
+      dispatchedEvents.push(ev);
+      return true;
+    },
+    open: () => ({ postMessage: () => {} }),
+    performance: { now: () => 12345.67 },
+    Gamepad: function () {},
+    GamepadButton: function () {},
+    GamepadEvent: function (this: any, type: string) {
+      this.type = type;
+    },
+  };
+
+  const mockNavigator: any = {};
+  const mockDocument: any = {
+    body: {
+      appendChild: (el: any) => el,
+    },
+    createElement: () => {
+      hudElement = {
+        style: {},
+        textContent: '',
+        onclick: null,
+      };
+      return hudElement;
+    },
+  };
+
+  const mockSetInterval = () => 1;
+  const mockSetTimeout = () => 2;
+  const mockWebSocket = function () {
+    return { onmessage: null, close: () => {} };
+  };
+  const mockBroadcastChannel = function () {
+    return { onmessage: null, close: () => {} };
+  };
+
+  const jsCode = snippets.tabletAddressBarCode.replace(/^javascript:/, '');
+  // Evaluate in strict function sandbox
+  const runner = new Function(
+    'window',
+    'navigator',
+    'document',
+    'performance',
+    'Event',
+    'setInterval',
+    'setTimeout',
+    'WebSocket',
+    'BroadcastChannel',
+    `"use strict"; ${jsCode}`
+  );
+  runner(
+    mockWindow,
+    mockNavigator,
+    mockDocument,
+    mockWindow.performance,
+    mockWindow.GamepadEvent,
+    mockSetInterval,
+    mockSetTimeout,
+    mockWebSocket,
+    mockBroadcastChannel
+  );
+
+  // Initial state check
+  assert.equal(hudElement.textContent, 'Tap:Link 8492310756');
+  assert.equal(typeof mockNavigator.getGamepads, 'function');
+  const initialPads = mockNavigator.getGamepads();
+  assert.ok(initialPads[0]);
+  assert.equal(initialPads[0].id, 'Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b12)');
+
+  // Simulate incoming 12-byte hex packet via window message:
+  // 50 (P) 01 (Guide) 03 00 (A+B) 7f 81 40 c0 (Axes) ff 80 (LT+RT) 00 00 (Seq)
+  const incomingPacketHex = '500103007f8140c0ff800000';
+  assert.ok(listeners['message'], 'Must have registered a message event listener on window');
+  listeners['message'].forEach((handler) => {
+    handler({ data: { __pulsepad_hex: incomingPacketHex } });
+  });
+
+  // Confirm HUD updated live
+  assert.equal(hudElement.textContent, 'Xbox LIVE #1');
+
+  // Confirm Gamepad values in navigator.getGamepads() updated immediately
+  const livePads = mockNavigator.getGamepads();
+  assert.ok(livePads[0]);
+  assert.equal(livePads[0].buttons[0].pressed, true, 'Button A pressed');
+  assert.equal(livePads[0].buttons[1].pressed, true, 'Button B (Continue) pressed');
+  assert.equal(livePads[0].buttons[16].pressed, true, 'Xbox Guide pressed');
+  assert.equal(livePads[0].buttons[6].value, 1, 'LT max value 1');
+  assert.ok(Math.abs(livePads[0].buttons[7].value - 0.5) <= 0.02, 'RT half value ~0.5');
+  assert.equal(livePads[0].axes[0], 1, 'Axis 0 max');
+  assert.equal(livePads[0].axes[1], -1, 'Axis 1 min');
+});
+
+
+

@@ -45,7 +45,7 @@ export const BUTTON_METADATA: Array<{
   psLabel: string;
   shortCode: string;
 }> = [
-  { index: 0, w3cName: 'Bottom Face (B0)', xboxLabel: 'A', psLabel: 'Cross (✕)', shortCode: 'A/✕' },
+  { index: 0, w3cName: 'Bottom Face (B0)', xboxLabel: 'A', psLabel: 'Cross (X)', shortCode: 'A/X' },
   { index: 1, w3cName: 'Right Face (B1)', xboxLabel: 'B', psLabel: 'Circle (○)', shortCode: 'B/○' },
   { index: 2, w3cName: 'Left Face (B2)', xboxLabel: 'X', psLabel: 'Square (□)', shortCode: 'X/□' },
   { index: 3, w3cName: 'Top Face (B3)', xboxLabel: 'Y', psLabel: 'Triangle (△)', shortCode: 'Y/△' },
@@ -272,8 +272,7 @@ export function simulateTransportLatency(params: {
   };
 }
 
-export const CLOUD_RELAY_FALLBACK_ORIGIN =
-  'https://ais-pre-swupckzn47pok277apvs2h-786374503805.asia-southeast1.run.app';
+export const CLOUD_RELAY_FALLBACK_ORIGIN = '';
 
 /**
  * Resolves the full application base URL including any repository subpath (e.g. `/Pulsepad` on GitHub Pages).
@@ -315,8 +314,8 @@ export function buildControllerPairUrl(
 }
 
 /**
- * Resolves the WebSocket / API relay origin. On static hosts like `*.github.io` that cannot host `/ws` or `/api/bridge.js`,
- * uses the live Cloud Run backend origin so cross-device Phone-to-Tablet pairing and external site bridges still work.
+ * Resolves the WebSocket / API relay origin. Always resolves to a clean local or hosted origin
+ * without routing to dead 404 backends.
  */
 export function resolveRelayBackendOrigin(origin?: string): string {
   const rawOrigin =
@@ -325,9 +324,6 @@ export function resolveRelayBackendOrigin(origin?: string): string {
       : typeof window !== 'undefined'
         ? window.location.origin
         : 'http://localhost:3000';
-  if (/\.github\.io$/i.test(rawOrigin.replace(/^https?:\/\//i, '').split('/')[0])) {
-    return CLOUD_RELAY_FALLBACK_ORIGIN;
-  }
   return rawOrigin.replace(/\/+$/, '');
 }
 

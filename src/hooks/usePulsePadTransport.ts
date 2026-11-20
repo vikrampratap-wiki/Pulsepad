@@ -43,18 +43,40 @@ function hexToBytes(hex: string): Uint8Array | null {
 }
 
 const subscribedExternalWindows = new Set<Window>();
+const activeMessagePorts = new Set<MessagePort>();
 
 export function registerExternalTargetWindow(win: Window | null): void {
   if (!win) return;
   subscribedExternalWindows.add(win);
 }
 
+export function registerExternalMessagePort(port: MessagePort | null): void {
+  if (!port) return;
+  activeMessagePorts.add(port);
+}
+
 function forwardPacketToOpenerWindow(bytes: Uint8Array): void {
   if (typeof window === 'undefined') return;
   const payload = { __pulsepad_hex: bytesToHex(bytes) };
+
+  // If a dedicated MessagePort is connected, use it exclusively for sub-15ms direct delivery
+  if (activeMessagePorts.size > 0) {
+    activeMessagePorts.forEach((port) => {
+      try {
+        port.postMessage(payload);
+      } catch {
+        activeMessagePorts.delete(port);
+      }
+    });
+    return;
+  }
+
+  // Fallback: window.opener or registered windows (deduplicated)
+  let sentToOpener = false;
   try {
     if (window.opener && !window.opener.closed) {
       window.opener.postMessage(payload, '*');
+      sentToOpener = true;
     }
     if (window.parent && window.parent !== window) {
       window.parent.postMessage(payload, '*');
@@ -67,7 +89,7 @@ function forwardPacketToOpenerWindow(bytes: Uint8Array): void {
     try {
       if (!targetWin || targetWin.closed) {
         subscribedExternalWindows.delete(targetWin);
-      } else {
+      } else if (targetWin !== window.opener || !sentToOpener) {
         targetWin.postMessage(payload, '*');
       }
     } catch {
@@ -133,8 +155,9 @@ export function usePulsePadTransport(
   const rttHistoryRef = useRef<number[]>([11.2, 11.8, 10.9, 12.1]);
   const peerMapRef = useRef<Map<string, PeerInfo>>(new Map());
 
-  // Throttling state for cloud HTTP fallback when WebRTC is still negotiating
+  // Throttling and backoff state for cloud HTTP fallback and WebRTC signaling to prevent 429 rate limits
   const lastCloudPostTimeRef = useRef<number>(0);
+  const cloudBlockedUntilRef = useRef<number>(0);
   const pendingCloudHexRef = useRef<string | null>(null);
   const cloudFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -171,21 +194,38 @@ export function usePulsePadTransport(
     }
   }, []);
 
-  // Helper to publish JSON envelope to the global cloud signaling/relay topic
+  // Helper to publish JSON envelope to the global cloud signaling/relay topic with 429 rate-limit backoff
   const postCloudMessage = useCallback(
     (payload: Record<string, unknown>) => {
+      const now = Date.now();
+      if (now < cloudBlockedUntilRef.current) {
+        if (payload.kind === 'webrtc-offer' || payload.kind === 'webrtc-answer') {
+          const delay = Math.max(100, cloudBlockedUntilRef.current - now + 50);
+          setTimeout(() => postCloudMessage(payload), delay);
+        }
+        return;
+      }
       const cleanRoom = roomCode.trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'pulse1';
       const topicUrl = `https://ntfy.sh/pulsepad_v3_room_${cleanRoom}`;
+      lastCloudPostTimeRef.current = now;
       fetch(topicUrl, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
           senderId: clientIdRef.current,
           senderRole: role,
           senderLabel: deviceLabel,
-          sentAt: Date.now(),
+          sentAt: now,
         }),
-      }).catch(() => {});
+      })
+        .then((res) => {
+          if (res.status === 429) {
+            const retryAfter = Number(res.headers.get('Retry-After')) || 20;
+            cloudBlockedUntilRef.current = Date.now() + retryAfter * 1000;
+          }
+        })
+        .catch(() => {});
     },
     [roomCode, role, deviceLabel]
   );
@@ -213,14 +253,37 @@ export function usePulsePadTransport(
 
     const onWindowMessage = (ev: MessageEvent) => {
       if (!ev.data || typeof ev.data !== 'object') return;
-      if (ev.data.__pulsepad_subscribe && ev.source && 'postMessage' in ev.source) {
-        const srcWin = ev.source as Window;
-        subscribedExternalWindows.add(srcWin);
-        try {
-          const initialBytes = encodeGamepadPacket(stateRef.current);
-          srcWin.postMessage({ __pulsepad_hex: bytesToHex(initialBytes) }, '*');
-        } catch {
-          // Ignore
+      if (ev.data.__pulsepad_subscribe) {
+        if (ev.source && 'postMessage' in ev.source) {
+          const srcWin = ev.source as Window;
+          if (srcWin !== window.opener) {
+            subscribedExternalWindows.add(srcWin);
+          }
+          try {
+            const initialBytes = encodeGamepadPacket(stateRef.current);
+            srcWin.postMessage({ __pulsepad_hex: bytesToHex(initialBytes) }, '*');
+          } catch {
+            // Ignore
+          }
+        }
+        if (ev.ports && ev.ports[0]) {
+          const port = ev.ports[0];
+          // Close and prune existing ports to prevent duplicate frame multiplication
+          activeMessagePorts.forEach((p) => {
+            try {
+              p.close();
+            } catch {
+              // Ignore
+            }
+          });
+          activeMessagePorts.clear();
+          activeMessagePorts.add(port);
+          try {
+            const initialBytes = encodeGamepadPacket(stateRef.current);
+            port.postMessage({ __pulsepad_hex: bytesToHex(initialBytes) });
+          } catch {
+            // Ignore
+          }
         }
       }
     };
@@ -228,7 +291,7 @@ export function usePulsePadTransport(
     return () => window.removeEventListener('message', onWindowMessage);
   }, [triggerLocalVibrate, postCloudMessage]);
 
-  const applyIncomingBinaryPacket = useCallback((bytes: Uint8Array) => {
+  const applyIncomingBinaryPacket = useCallback((bytes: Uint8Array, skipBc = false) => {
     const decoded = decodeGamepadPacket(bytes);
     if (!decoded) return;
     packetCounterRef.current += 1;
@@ -237,6 +300,13 @@ export function usePulsePadTransport(
     setLastHexPacket(formatPacketHex(bytes));
     updateLocalW3CGamepadBridge(decoded);
     forwardPacketToOpenerWindow(bytes);
+    if (!skipBc && bcRef.current) {
+      try {
+        bcRef.current.postMessage({ __pulsepad_hex: bytesToHex(bytes) });
+      } catch {
+        // Ignore
+      }
+    }
   }, []);
 
   // Wait up to 450ms for ICE gathering so SDP offer/answer is self-contained (1-message Vanilla ICE)
@@ -257,8 +327,16 @@ export function usePulsePadTransport(
 
   // Setup WebRTC PeerConnection with unordered, zero-retransmit UDP-like DataChannel
   const initWebRTC = useCallback(
-    async (isInitiator: boolean, viaCloudSignaling = false) => {
+    async (isInitiator: boolean, viaCloudSignaling = false, force = false) => {
       if (typeof RTCPeerConnection === 'undefined') return;
+      if (
+        !force &&
+        (dcRef.current?.readyState === 'open' ||
+          pcRef.current?.signalingState === 'have-local-offer' ||
+          pcRef.current?.connectionState === 'connecting')
+      ) {
+        return;
+      }
       try {
         if (pcRef.current) {
           pcRef.current.close();
@@ -267,9 +345,29 @@ export function usePulsePadTransport(
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
           ],
         });
         pcRef.current = pc;
+
+        const updateConnectionState = () => {
+          const isConn =
+            pc.connectionState === 'connected' ||
+            pc.iceConnectionState === 'connected' ||
+            pc.iceConnectionState === 'completed';
+          const isDisconn =
+            pc.connectionState === 'failed' ||
+            pc.connectionState === 'closed' ||
+            pc.iceConnectionState === 'failed';
+          if (isConn) {
+            setWebrtcConnected(true);
+          } else if (isDisconn) {
+            setWebrtcConnected(false);
+          }
+        };
+        pc.onconnectionstatechange = updateConnectionState;
+        pc.oniceconnectionstatechange = updateConnectionState;
 
         const setupDataChannel = (channel: RTCDataChannel) => {
           channel.binaryType = 'arraybuffer';
@@ -283,7 +381,10 @@ export function usePulsePadTransport(
               // Ignore
             }
           };
-          channel.onclose = () => setWebrtcConnected(false);
+          channel.onclose = () => {
+            setWebrtcConnected(false);
+            dcRef.current = null;
+          };
           channel.onmessage = (ev) => {
             if (ev.data instanceof ArrayBuffer) {
               applyIncomingBinaryPacket(new Uint8Array(ev.data));
@@ -362,9 +463,12 @@ export function usePulsePadTransport(
         bc.onmessage = (ev) => {
           if (!isMounted) return;
           if (ev.data instanceof ArrayBuffer) {
-            applyIncomingBinaryPacket(new Uint8Array(ev.data));
+            applyIncomingBinaryPacket(new Uint8Array(ev.data), true);
           } else if (ev.data instanceof Uint8Array) {
-            applyIncomingBinaryPacket(ev.data);
+            applyIncomingBinaryPacket(ev.data, true);
+          } else if (ev.data && typeof ev.data.__pulsepad_hex === 'string') {
+            const b = hexToBytes(ev.data.__pulsepad_hex);
+            if (b) applyIncomingBinaryPacket(b, true);
           }
         };
       } catch {
@@ -388,8 +492,8 @@ export function usePulsePadTransport(
             kind: 'hello',
             hex: bytesToHex(encodeGamepadPacket(stateRef.current)),
           });
-          // If this device is the phone controller, also initiate WebRTC DataChannel offer
-          if (role === 'controller') {
+          // If this device is the phone controller, only initiate WebRTC offer if DataChannel is not already open
+          if (role === 'controller' && (!dcRef.current || dcRef.current.readyState !== 'open')) {
             initWebRTC(true, true);
           }
         };
@@ -422,6 +526,16 @@ export function usePulsePadTransport(
                 kind: 'welcome',
                 hex: bytesToHex(encodeGamepadPacket(stateRef.current)),
               });
+              // Only initiate WebRTC if controller and DataChannel is not already open or actively negotiating
+              if (
+                role === 'controller' &&
+                (!dcRef.current || dcRef.current.readyState !== 'open') &&
+                (!pcRef.current ||
+                  pcRef.current.connectionState === 'failed' ||
+                  pcRef.current.connectionState === 'closed')
+              ) {
+                initWebRTC(true, true);
+              }
               if (typeof msg.hex === 'string') {
                 const bytes = hexToBytes(msg.hex);
                 if (bytes) applyIncomingBinaryPacket(bytes);
@@ -429,7 +543,24 @@ export function usePulsePadTransport(
               return;
             }
 
-            if (msg.kind === 'welcome' || msg.kind === 'pad') {
+            if (msg.kind === 'welcome') {
+              if (
+                role === 'controller' &&
+                (!dcRef.current || dcRef.current.readyState !== 'open') &&
+                (!pcRef.current ||
+                  pcRef.current.connectionState === 'failed' ||
+                  pcRef.current.connectionState === 'closed')
+              ) {
+                initWebRTC(true, true);
+              }
+              if (typeof msg.hex === 'string') {
+                const bytes = hexToBytes(msg.hex);
+                if (bytes) applyIncomingBinaryPacket(bytes);
+              }
+              return;
+            }
+
+            if (msg.kind === 'pad') {
               if (typeof msg.hex === 'string') {
                 const bytes = hexToBytes(msg.hex);
                 if (bytes) applyIncomingBinaryPacket(bytes);
@@ -443,7 +574,7 @@ export function usePulsePadTransport(
             }
 
             if (msg.kind === 'webrtc-offer' && msg.sdp) {
-              await initWebRTC(false, true);
+              await initWebRTC(false, true, true);
               if (pcRef.current) {
                 await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp));
                 const answer = await pcRef.current.createAnswer();
@@ -477,7 +608,11 @@ export function usePulsePadTransport(
         cloudWs.onerror = () => {};
         cloudWs.onclose = () => {
           if (!isMounted) return;
-          cloudReconnectTimer = setTimeout(connectCloudRelay, 3000);
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setWsConnected(false);
+          }
+          const delay = Math.max(3000, cloudBlockedUntilRef.current - Date.now());
+          cloudReconnectTimer = setTimeout(connectCloudRelay, delay);
         };
       } catch {
         // Ignore if blocked
@@ -584,6 +719,9 @@ export function usePulsePadTransport(
         ws.onerror = () => {};
         ws.onclose = () => {
           if (!isMounted) return;
+          if (!cloudWsRef.current || cloudWsRef.current.readyState !== WebSocket.OPEN) {
+            setWsConnected(false);
+          }
           reconnectTimer = setTimeout(connectLocalWs, 2500);
         };
       } catch {
@@ -602,6 +740,9 @@ export function usePulsePadTransport(
       wsRef.current?.close();
       cloudWsRef.current?.close();
       pcRef.current?.close();
+      dcRef.current = null;
+      setWsConnected(false);
+      setWebrtcConnected(false);
     };
   }, [
     roomCode,
@@ -675,7 +816,7 @@ export function usePulsePadTransport(
 
       if (bcRef.current) {
         try {
-          bcRef.current.postMessage(packet);
+          bcRef.current.postMessage({ __pulsepad_hex: bytesToHex(packet) });
         } catch {
           // Ignore
         }
@@ -692,7 +833,8 @@ export function usePulsePadTransport(
         }
       }
 
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Local WebSocket is used as fallback when direct WebRTC DataChannel is not open
+      if (!sentOverDirectChannel && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
           wsRef.current.send(packet);
           sentOverDirectChannel = true;
@@ -701,14 +843,16 @@ export function usePulsePadTransport(
         }
       }
 
-      // If neither local WS nor direct WebRTC DataChannel is open yet (e.g. on static GitHub Pages across Phone + Tablet),
-      // stream compact 12-byte hex state over the cloud relay (immediate for buttons, 120ms throttled for sticks)
+      // If neither local WS nor direct WebRTC DataChannel is open yet (e.g. initial connection handoff),
+      // stream compact 12-byte hex state with adaptive rate-limiting to avoid HTTP 429 rate limits
+      // while guaranteeing that all button releases and final stick positions are flushed.
       if (!sentOverDirectChannel) {
         const hex = bytesToHex(packet);
         const now = Date.now();
         const elapsed = now - lastCloudPostTimeRef.current;
+        const minThrottleMs = isDiscreteButton ? 1000 : 1500;
 
-        if (isDiscreteButton || elapsed >= 120) {
+        if (elapsed >= minThrottleMs && now >= cloudBlockedUntilRef.current) {
           lastCloudPostTimeRef.current = now;
           pendingCloudHexRef.current = null;
           if (cloudFlushTimerRef.current) {
@@ -719,14 +863,26 @@ export function usePulsePadTransport(
         } else {
           pendingCloudHexRef.current = hex;
           if (!cloudFlushTimerRef.current) {
-            cloudFlushTimerRef.current = setTimeout(() => {
-              cloudFlushTimerRef.current = null;
-              if (pendingCloudHexRef.current) {
-                lastCloudPostTimeRef.current = Date.now();
-                postCloudMessage({ kind: 'pad', hex: pendingCloudHexRef.current });
-                pendingCloudHexRef.current = null;
-              }
-            }, 125 - elapsed);
+            const delay = Math.max(
+              80,
+              Math.max(minThrottleMs - elapsed, cloudBlockedUntilRef.current - now)
+            );
+            const scheduleFlush = (waitDelay: number) => {
+              cloudFlushTimerRef.current = setTimeout(() => {
+                cloudFlushTimerRef.current = null;
+                const currentTime = Date.now();
+                if (currentTime < cloudBlockedUntilRef.current) {
+                  scheduleFlush(Math.max(80, cloudBlockedUntilRef.current - currentTime + 20));
+                  return;
+                }
+                if (pendingCloudHexRef.current) {
+                  lastCloudPostTimeRef.current = currentTime;
+                  postCloudMessage({ kind: 'pad', hex: pendingCloudHexRef.current });
+                  pendingCloudHexRef.current = null;
+                }
+              }, waitDelay);
+            };
+            scheduleFlush(delay);
           }
         }
       }

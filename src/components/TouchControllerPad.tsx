@@ -700,7 +700,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
                 b0 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
               }`}
             >
-              {isPS ? '✕' : 'A'}
+              {isPS ? 'X' : 'A'}
             </button>
             <button
               type="button"
@@ -807,7 +807,7 @@ export const TouchControllerPad: React.FC<TouchControllerPadProps> = ({
               b0 ? 'pad-btn-themed-active' : 'bg-slate-900 pad-btn-themed'
             }`}
           >
-            {isPS ? '✕' : 'A'}
+            {isPS ? 'X' : 'A'}
           </button>
           <div />
         </div>

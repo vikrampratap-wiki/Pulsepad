@@ -147,7 +147,7 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             <ExternalLink className="w-3.5 h-3.5" />
             <span>
               {xboxLaunched
-                ? '✓ xbox.com/play Linked (Keep Tab Open)'
+                ? '[LINKED] xbox.com/play Linked (Keep Tab Open)'
                 : 'Step 2: यहाँ से xbox.com/play खोलें ↗'}
             </span>
           </button>
@@ -177,14 +177,14 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
       <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2 text-[11px]">
           <span className="font-mono text-emerald-400 font-semibold">
-            ✓ पूरा v7 बुकमार्क कोड (अंत में <code className="text-amber-300">&#125;)();</code> अवश्य जांचें — कुल {bridgeSnippets.bookmarkletHref.length} अक्षर):
+            पूरा v7 बुकमार्क कोड (अंत में <code className="text-amber-300">&#125;)();</code> अवश्य जांचें — कुल {bridgeSnippets.bookmarkletHref.length} अक्षर):
           </span>
           <button
             type="button"
             onClick={() => handleCopy('bm-box', bridgeSnippets.bookmarkletHref)}
             className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold hover:bg-emerald-500/30 transition-colors"
           >
-            {copiedId === 'bm-box' ? '✓ कॉपी हो गया!' : 'पूरा कोड कॉपी करें'}
+            {copiedId === 'bm-box' ? 'कॉपी हो गया!' : 'पूरा कोड कॉपी करें'}
           </button>
         </div>
         <textarea
@@ -222,7 +222,7 @@ export const ExternalGamingBridgeDrawer: React.FC<ExternalGamingBridgeDrawerProp
             कदम 3: URL पट्टी में xboxpad चलाएं
           </span>
           <p className="text-slate-300 leading-relaxed">
-            अब <strong className="text-white">xbox.com/play</strong> वाले टैब की ऊपरी URL पट्टी में <code className="text-emerald-300 font-bold">xboxpad</code> लिखकर नीचे आने वाले ★ सुझाव पर टैप करें। कोने में <code className="text-emerald-300">🎮 Xbox Pad LIVE (Pkt #...)</code> दिखते ही सभी बटन तुरंत काम करेंगे!
+            अब <strong className="text-white">xbox.com/play</strong> वाले टैब की ऊपरी URL पट्टी में <code className="text-emerald-300 font-bold">xboxpad</code> लिखकर नीचे आने वाले सुझाव पर टैप करें। कोने में <code className="text-emerald-300">[PAD] Xbox Pad LIVE (Pkt #...)</code> दिखते ही सभी बटन तुरंत काम करेंगे!
           </p>
         </div>
       </div>
